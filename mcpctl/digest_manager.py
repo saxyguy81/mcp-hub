@@ -5,12 +5,19 @@ Handles locking images to specific digest hashes and pull-by-digest operations
 
 import json
 import subprocess
-import docker
 from pathlib import Path
 from typing import Dict, List, Any
 from dataclasses import dataclass, asdict
 import typer
 from . import container_engine
+
+# Make Docker import optional to avoid CI conflicts
+try:
+    import docker
+    DOCKER_AVAILABLE = True
+except ImportError:
+    DOCKER_AVAILABLE = False
+    docker = None
 
 @dataclass
 class ImageDigest:
@@ -40,6 +47,9 @@ class DigestManager:
     def _get_docker_client(self):
         """Get Docker client, handling both Docker and Vessel"""
         if self.docker_client is None:
+            if not DOCKER_AVAILABLE:
+                typer.echo("⚠️ Docker Python package not available, using CLI fallback", err=True)
+                return None
             try:
                 self.docker_client = docker.from_env()
             except Exception as e:
