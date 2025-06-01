@@ -3,7 +3,7 @@ name: Release MCP Hub
 on:
   push:
     tags:
-      - 'v*.*.*'  # Trigger on version tags like v1.0.0
+      - 'v*.*.*'
 
 jobs:
   test:
@@ -17,13 +17,10 @@ jobs:
         with:
           python-version: '3.11'
       
-      - name: Install Python dependencies (without Docker package)
+      - name: Install Python dependencies (NO Docker package)
         run: |
-          # Install Python dependencies WITHOUT Docker package for tests
           python -m pip install --upgrade pip
           pip install typer pyinstaller pyyaml toml pytest
-          
-          # Verify core CLI functionality (without Docker operations)
           python -c "from mcpctl.cli import app; print('CLI imports successfully')"
 
   build-cli:
@@ -57,7 +54,7 @@ jobs:
         with:
           python-version: '3.11'
       
-      - name: Install dependencies (without Docker package)
+      - name: Install dependencies (NO Docker package)
         run: |
           python -m pip install --upgrade pip
           pip install typer pyinstaller pyyaml toml
@@ -126,7 +123,7 @@ jobs:
         with:
           python-version: '3.11'
       
-      - name: Install Python dependencies (without Docker package)
+      - name: Install Python dependencies (NO Docker package)
         run: |
           python -m pip install --upgrade pip
           pip install typer pyinstaller pyyaml toml
@@ -195,28 +192,19 @@ jobs:
       - name: Generate checksums
         run: |
           mkdir -p release-assets
-          
-          # Collect CLI binaries from downloaded artifacts (avoid duplicates)
           find . -path "*/release-assets" -prune -o -name "mcpctl-*" -type f -print | while read file; do
             if [ ! -f "release-assets/$(basename "$file")" ]; then
               cp "$file" release-assets/
             fi
           done
-          
-          # Collect Electron apps from downloaded artifacts (avoid duplicates)
           find . -path "*/release-assets" -prune -o -name "MCP-Hub-*" -type f -print | while read file; do
             if [ ! -f "release-assets/$(basename "$file")" ]; then
               cp "$file" release-assets/
             fi
           done
-          
-          # Copy installation script from repository
           cp install.sh release-assets/
-          
-          # Generate checksums
           cd release-assets
           sha256sum * > checksums.txt
-          
           echo "Release assets prepared:"
           ls -la
       
@@ -232,16 +220,12 @@ jobs:
             echo "- ✅ PATH immediate availability (no shell restart)" >> release-notes.md
             echo "- ✅ Smart port conflict resolution" >> release-notes.md
             echo "- ✅ Zero-friction installation experience" >> release-notes.md
-            echo "- ✅ Improved Docker CLI fallback support" >> release-notes.md
+            echo "- ✅ Docker CLI fallback support" >> release-notes.md
             echo "" >> release-notes.md
             echo "## 🚀 Installation:" >> release-notes.md
             echo "\`\`\`bash" >> release-notes.md
             echo "curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/install.sh | bash" >> release-notes.md
             echo "\`\`\`" >> release-notes.md
-            echo "" >> release-notes.md
-            echo "**Note:** Container images will be published separately to avoid CI conflicts." >> release-notes.md
-            echo "" >> release-notes.md
-            echo "See commits: https://github.com/${{ github.repository }}/commits/${{ steps.version.outputs.VERSION }}" >> release-notes.md
           fi
       
       - name: Create Release
@@ -264,18 +248,3 @@ jobs:
               gh release upload ${{ steps.version.outputs.VERSION }} "$file" --clobber
             fi
           done
-      
-      - name: Release Summary
-        run: |
-          echo "🎉 MCP Hub ${{ steps.version.outputs.VERSION }} Released Successfully!"
-          echo ""
-          echo "✅ CLI Binaries: Available for all platforms"
-          echo "✅ Desktop Apps: Available for macOS, Windows, Linux"  
-          echo "✅ Installation Script: Ready for immediate use"
-          echo ""
-          echo "⚡ Quick Install:"
-          echo "   curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/install.sh | bash"
-          echo ""
-          echo "📋 Next Steps:"
-          echo "   - Container images will be published separately"
-          echo "   - Enhanced UX features are now live!"
