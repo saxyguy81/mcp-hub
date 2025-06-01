@@ -152,12 +152,6 @@ jobs:
           cd electron
           npm install
       
-      - name: Set architecture for macOS builds
-        if: matrix.platform == 'macos'
-        run: |
-          cd electron
-          npm config set target_arch ${{ matrix.arch }}
-      
       - name: Build Electron app
         run: |
           cd electron
