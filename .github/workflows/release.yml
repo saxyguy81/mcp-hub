@@ -195,6 +195,7 @@ jobs:
           echo "Checking Docker installation..."
           docker --version
           docker info
+          whoami
           echo "Docker is ready!"
       
       - name: Set up Python
@@ -211,12 +212,9 @@ jobs:
         run: |
           pyinstaller main.py -n mcpctl --onefile
       
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Login to GitHub Container Registry (manual)
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
       
       - name: Extract version from tag
         id: version
@@ -245,16 +243,29 @@ jobs:
         run: |
           mkdir -p release-assets
           
-          # Collect all binaries
-          find . -name "mcpctl-*" -type f -exec cp {} release-assets/ \;
-          find . -name "MCP-Hub-*" -type f -exec cp {} release-assets/ \;
+          # Collect CLI binaries from downloaded artifacts (avoid duplicates)
+          find . -path "*/release-assets" -prune -o -name "mcpctl-*" -type f -print | while read file; do
+            if [ ! -f "release-assets/$(basename "$file")" ]; then
+              cp "$file" release-assets/
+            fi
+          done
+          
+          # Collect Electron apps from downloaded artifacts (avoid duplicates)
+          find . -path "*/release-assets" -prune -o -name "MCP-Hub-*" -type f -print | while read file; do
+            if [ ! -f "release-assets/$(basename "$file")" ]; then
+              cp "$file" release-assets/
+            fi
+          done
+          
+          # Copy installation script from repository
+          cp scripts/install.sh release-assets/
           
           # Generate checksums
           cd release-assets
           sha256sum * > checksums.txt
           
-          # Create installation script
-          cp ../scripts/install.sh ./
+          echo "Release assets prepared:"
+          ls -la
       
       - name: Read CHANGELOG
         id: changelog
