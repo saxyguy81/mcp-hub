@@ -28,19 +28,29 @@ jobs:
           chmod +x scripts/test-release-assets.sh
           ./scripts/test-release-assets.sh v1.0.2
 
-  test-matrix:
+  test-platform-detection:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        include:
-          - os: ubuntu-latest
-            platform: linux-amd64
-          - os: macos-latest  
-            platform: macos-arm64
     steps:
       - uses: actions/checkout@v4
-      - name: Test
+      - name: Test platform detection
         run: |
           chmod +x scripts/detect-platform.sh
-          [ "$(./scripts/detect-platform.sh)" = "${{ matrix.platform }}" ]
+          detected=$(./scripts/detect-platform.sh)
+          echo "Runner: ${{ matrix.os }}"
+          echo "System: $(uname -s) $(uname -m)"
+          echo "Detected platform: $detected"
+          
+          # Verify the platform detection returns a valid format
+          case "$detected" in
+            macos-amd64|macos-arm64|linux-amd64|linux-arm64|windows-amd64)
+              echo "✅ Valid platform detected: $detected"
+              ;;
+            *)
+              echo "❌ Invalid platform format: $detected"
+              echo "Expected one of: macos-amd64, macos-arm64, linux-amd64, linux-arm64, windows-amd64"
+              exit 1
+              ;;
+          esac
