@@ -1,835 +1,280 @@
 #!/bin/bash
-# MCP Hub Bootstrap Installer v1.0.2
-# One-line installation for Model Context Protocol server management
-# Fixes: PATH immediate availability + port conflict handling
+# MCP Hub Enhanced Installer - Auto-generated
+set -euo pipefail
 
-set -e
-
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-
-log() { echo -e "${BLUE}[MCP Hub]${NC} $1"; }
-success() { echo -e "${GREEN}✓${NC} $1"; }
-error() { echo -e "${RED}✗${NC} $1"; }
-warning() { echo -e "${YELLOW}⚠${NC} $1"; }
-
-# Configuration
-INSTALL_DIR="$HOME/.mcpctl"
-BIN_DIR="$INSTALL_DIR/bin"
-WORKSPACE_DIR="$INSTALL_DIR/workspaces"
-DEMO_WORKSPACE="$WORKSPACE_DIR/demo"
-DEFAULT_PORT=3002
-
-# Global variables for discovered ports
-DEMO_PORT=""
-ALTERNATE_PORTS=""
-
-# Handle command line arguments
-SKIP_DEPS=false
-BUILD_FROM_SOURCE=false
-
-for arg in "$@"; do
-    case $arg in
-        --skip-deps) SKIP_DEPS=true ;;
-        --build-from-source) BUILD_FROM_SOURCE=true ;;
-        --help|-h)
-            echo "MCP Hub Bootstrap Installer v1.0.2"
-            echo "Usage: $0 [options]"
-            echo "Options:"
-            echo "  --help              Show this help"
-            echo "  --skip-deps         Skip dependency installation"
-            echo "  --build-from-source Build from source instead of downloading binary"
-            exit 0
-            ;;
-    esac
-done
-
-# Enhanced port conflict detection and resolution
-find_available_port() {
-    local start_port=${1:-3002}
-    local max_attempts=10
-    local port=$start_port
-    
-    for ((i=0; i<max_attempts; i++)); do
-        if ! lsof -i :$port &> /dev/null; then
-            echo $port
-            return 0
-        fi
-        ((port++))
-    done
-    
-    # If no port found in range, try some common alternatives
-    local alt_ports=(8080 8000 9000 3000 4000 5000)
-    for alt_port in "${alt_ports[@]}"; do
-        if ! lsof -i :$alt_port &> /dev/null; then
-            echo $alt_port
-            return 0
-        fi
-    done
-    
-    # Last resort - let system assign
-    echo 0
-}
-
-check_port_conflicts() {
-    log "Checking port availability..."
-    
-    # Check default port
-    if lsof -i :$DEFAULT_PORT &> /dev/null; then
-        local conflicting_process=$(lsof -i :$DEFAULT_PORT | grep LISTEN | awk '{print $1}' | head -1)
-        warning "Port $DEFAULT_PORT is in use by: $conflicting_process"
-        
-        # Find alternative port
-        DEMO_PORT=$(find_available_port $((DEFAULT_PORT + 1)))
-        if [ "$DEMO_PORT" != "0" ]; then
-            success "Found available port: $DEMO_PORT"
-            ALTERNATE_PORTS="$DEMO_PORT"
-        else
-            error "No available ports found"
-            return 1
-        fi
-    else
-        success "Port $DEFAULT_PORT is available"
-        DEMO_PORT=$DEFAULT_PORT
-    fi
-    
-    # Find a few more backup ports for multiple services
-    for offset in 1 2 3; do
-        local test_port=$((DEMO_PORT + offset))
-        if ! lsof -i :$test_port &> /dev/null; then
-            ALTERNATE_PORTS="$ALTERNATE_PORTS $test_port"
-        fi
-    done
-    
-    log "Available ports: $DEMO_PORT $ALTERNATE_PORTS"
-}
-
+# === CORE LIBRARY ===
+# MCP Hub Core - Basic utilities
+# Colors
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
+BLUE='\033[0;34m'; BOLD='\033[1m'; NC='\033[0m'
+# Logging
+log_info() { echo -e "${BLUE}ℹ${NC} $1"; }
+log_success() { echo -e "${GREEN}✅${NC} $1"; }
+log_warning() { echo -e "${YELLOW}⚠${NC} $1"; }
+log_error() { echo -e "${RED}❌${NC} $1"; }
+log_step() { echo -e "${BOLD}${BLUE}📋 $1${NC}"; }
+# Utilities
+command_exists() { command -v "$1" >/dev/null 2>&1; }
 # Platform detection
 detect_platform() {
-    local os=$(uname -s)
-    local arch=$(uname -m)
-    
-    case "$os" in
-        "Darwin")
-            case "$arch" in
-                "x86_64") PLATFORM="macos-intel" ;;
-                "arm64") PLATFORM="macos-silicon" ;;
-                *) error "Unsupported macOS architecture: $arch"; exit 1 ;;
-            esac
-            ;;
-        "Linux")
-            case "$arch" in
-                "x86_64") PLATFORM="linux-x64" ;;
-                "aarch64") PLATFORM="linux-arm64" ;;
-                *) error "Unsupported Linux architecture: $arch"; exit 1 ;;
-            esac
-            ;;
-        "CYGWIN"*|"MINGW"*|"MSYS"*)
-            PLATFORM="windows-x64"
-            ;;
-        *)
-            error "Unsupported operating system: $os"
-            exit 1
-            ;;
+    case "$(uname -s)" in
+        Darwin*)
+            case "$(uname -m)" in
+                x86_64) echo "darwin-amd64" ;;
+                arm64) echo "darwin-arm64" ;;
+                *) log_error "Unsupported macOS: $(uname -m)" && exit 1 ;;
+            esac ;;
+        Linux*)
+            case "$(uname -m)" in
+                x86_64) echo "linux-amd64" ;;
+                aarch64|arm64) echo "linux-arm64" ;;
+                *) log_error "Unsupported Linux: $(uname -m)" && exit 1 ;;
+            esac ;;
+        CYGWIN*|MINGW*|MSYS*) echo "windows-amd64" ;;
+        *) log_error "Unsupported platform: $(uname -s)" && exit 1 ;;
     esac
-    
-    success "Detected platform: $PLATFORM"
 }
-
-# Check dependencies
-check_dependencies() {
-    if [ "$SKIP_DEPS" = true ]; then
-        log "Skipping dependency check (--skip-deps specified)"
+# Install dependencies
+install_dependencies() {
+    log_step "Checking dependencies..."
+    local missing_deps=()
+    
+    ! command_exists docker && missing_deps+=("docker")
+    ! command_exists git && missing_deps+=("git") 
+    ! command_exists python3 && missing_deps+=("python3")
+    
+    if [ ${#missing_deps[@]} -eq 0 ]; then
+        log_success "All dependencies found"
         return 0
     fi
     
-    log "Checking dependencies..."
+    log_warning "Missing: ${missing_deps[*]}"
     
-    local missing_deps=()
-    
-    if ! command -v docker &> /dev/null; then
-        missing_deps+=("docker")
-    fi
-    
-    if ! command -v git &> /dev/null; then
-        missing_deps+=("git")
-    fi
-    
-    if ! command -v python3 &> /dev/null; then
-        missing_deps+=("python3")
-    fi
-    
-    if [ ${#missing_deps[@]} -gt 0 ]; then
-        warning "Missing dependencies: ${missing_deps[*]}"
-        install_dependencies "${missing_deps[@]}"
+    if command_exists apt-get; then
+        sudo apt-get update -qq
+        for dep in "${missing_deps[@]}"; do
+            case $dep in
+                docker) sudo apt-get install -y docker.io && sudo systemctl start docker ;;
+                git) sudo apt-get install -y git ;;
+                python3) sudo apt-get install -y python3 ;;
+            esac
+        done
+    elif command_exists brew; then
+        for dep in "${missing_deps[@]}"; do
+            case $dep in
+                docker) brew install --cask docker ;;
+                git) brew install git ;;
+                python3) brew install python3 ;;
+            esac
+        done
     else
-        success "All dependencies available"
+        log_error "Install manually: ${missing_deps[*]}" && exit 1
     fi
-}
-
-# Install missing dependencies
-install_dependencies() {
-    local deps=("$@")
     
-    log "Installing missing dependencies..."
-    
-    case "$PLATFORM" in
-        "macos-"*)
-            for dep in "${deps[@]}"; do
-                case "$dep" in
-                    "docker")
-                        warning "Please install Docker Desktop from: https://www.docker.com/products/docker-desktop"
-                        warning "After installation, start Docker Desktop and try again"
-                        ;;
-                    "git")
-                        if command -v brew &> /dev/null; then
-                            log "Installing git via Homebrew..."
-                            brew install git
-                        else
-                            warning "Please install Xcode Command Line Tools:"
-                            warning "  xcode-select --install"
-                        fi
-                        ;;
-                    "python3")
-                        if command -v brew &> /dev/null; then
-                            log "Installing python3 via Homebrew..."
-                            brew install python3
-                        else
-                            warning "Please install Python from: https://www.python.org/downloads/"
-                        fi
-                        ;;
-                esac
-            done
-            ;;
-        "linux-"*)
-            for dep in "${deps[@]}"; do
-                case "$dep" in
-                    "docker")
-                        log "Installing Docker..."
-                        if curl -fsSL https://get.docker.com | sh; then
-                            sudo usermod -aG docker "$USER"
-                            success "Docker installed. Please log out and back in for group changes to take effect"
-                        else
-                            warning "Docker installation failed. Please install manually"
-                        fi
-                        ;;
-                    "git")
-                        if command -v apt-get &> /dev/null; then
-                            sudo apt-get update && sudo apt-get install -y git
-                        elif command -v yum &> /dev/null; then
-                            sudo yum install -y git
-                        elif command -v dnf &> /dev/null; then
-                            sudo dnf install -y git
-                        fi
-                        ;;
-                    "python3")
-                        if command -v apt-get &> /dev/null; then
-                            sudo apt-get update && sudo apt-get install -y python3 python3-pip python3-venv
-                        elif command -v yum &> /dev/null; then
-                            sudo yum install -y python3 python3-pip
-                        elif command -v dnf &> /dev/null; then
-                            sudo dnf install -y python3 python3-pip
-                        fi
-                        ;;
-                esac
-            done
-            ;;
-        "windows-"*)
-            warning "Please install dependencies manually on Windows:"
-            warning "- Docker Desktop: https://www.docker.com/products/docker-desktop"
-            warning "- Git: https://git-scm.com/download/win"
-            warning "- Python: https://www.python.org/downloads/windows/"
-            ;;
-    esac
+    log_success "Dependencies installed"
 }
-
-# Download and install mcpctl binary
+# Install mcpctl binary
 install_mcpctl() {
-    log "Installing mcpctl..."
+    local platform="$1"
+    log_step "Installing mcpctl binary..."
     
-    # Create directories
-    mkdir -p "$BIN_DIR"
-    mkdir -p "$WORKSPACE_DIR"
+    mkdir -p "$BIN_DIR" "$WORKSPACE_DIR"
     
-    if [ "$BUILD_FROM_SOURCE" = true ]; then
-        log "Building from source (--build-from-source specified)..."
-        build_from_source
-        return
-    fi
+    local binary_name="mcpctl"
+    [[ "$platform" == *"windows"* ]] && binary_name="mcpctl.exe"
     
-    # Download binary
-    local binary_url="https://github.com/saxyguy81/mcp-hub/releases/latest/download/mcpctl-$PLATFORM"
-    local binary_path="$BIN_DIR/mcpctl"
+    local url="https://github.com/$REPO/releases/download/$VERSION/mcpctl-$platform"
+    [[ "$platform" == *"windows"* ]] && url="$url.exe"
     
-    log "Downloading mcpctl binary for $PLATFORM..."
-    if curl -fsSL "$binary_url" -o "$binary_path"; then
-        chmod +x "$binary_path"
-        success "mcpctl binary installed"
-        
-        # Verify the binary works
-        if "$binary_path" --version &> /dev/null; then
-            success "mcpctl binary verified"
-        else
-            warning "Binary verification failed, trying source build..."
-            build_from_source
-        fi
+    log_info "Downloading from: $url"
+    
+    local temp_file="/tmp/$binary_name"
+    if command_exists curl; then
+        curl -fsSL -o "$temp_file" "$url"
+    elif command_exists wget; then
+        wget -q -O "$temp_file" "$url"
     else
-        warning "Binary download failed, building from source..."
-        build_from_source
-    fi
-}
-
-# Build from source fallback
-build_from_source() {
-    log "Building mcpctl from source..."
-    
-    local temp_dir=$(mktemp -d)
-    cd "$temp_dir"
-    
-    log "Cloning repository..."
-    if ! git clone https://github.com/saxyguy81/mcp-hub.git; then
-        error "Failed to clone repository"
-        cd / && rm -rf "$temp_dir"
-        return 1
+        log_error "Neither curl nor wget found" && exit 1
     fi
     
-    cd mcp-hub
-    
-    # Check if requirements.txt exists
-    if [ -f "requirements.txt" ]; then
-        log "Installing Python dependencies..."
-        
-        # Try different Python installation methods
-        if python3 -m pip install --user -r requirements.txt 2>/dev/null; then
-            success "Dependencies installed with --user flag"
-        elif python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt 2>/dev/null; then
-            success "Dependencies installed in virtual environment"
-            # Install pyinstaller in the venv
-            pip install pyinstaller
-        elif pip3 install --break-system-packages -r requirements.txt 2>/dev/null; then
-            success "Dependencies installed with --break-system-packages"
-        else
-            warning "Could not install Python dependencies automatically"
-            warning "Please install dependencies manually and try again"
-            cd / && rm -rf "$temp_dir"
-            return 1
-        fi
-        
-        # Build binary
-        log "Building mcpctl binary..."
-        if command -v pyinstaller &> /dev/null; then
-            if pyinstaller --onefile --name mcpctl main.py; then
-                cp dist/mcpctl "$BIN_DIR/"
-                chmod +x "$BIN_DIR/mcpctl"
-                success "Built mcpctl from source"
-            else
-                error "Failed to build binary with pyinstaller"
-                cd / && rm -rf "$temp_dir"
-                return 1
-            fi
-        else
-            warning "PyInstaller not available, installing mcpctl as script"
-            # Copy the main script as mcpctl
-            cp main.py "$BIN_DIR/mcpctl"
-            chmod +x "$BIN_DIR/mcpctl"
-            success "Installed mcpctl as Python script"
-        fi
-    else
-        warning "No requirements.txt found, using downloaded binary approach"
-        # If the repository doesn't have the expected structure,
-        # we'll create a functional mcpctl script directly
-        create_mcpctl_script
-    fi
-    
-    cd /
-    rm -rf "$temp_dir"
-}
-
-# Create functional mcpctl script if source build fails
-create_mcpctl_script() {
-    log "Creating mcpctl script..."
-    
-    # This creates a minimal but functional mcpctl
-    cat > "$BIN_DIR/mcpctl" << 'EOF'
-#!/bin/bash
-# mcpctl - MCP Hub Command Line Tool v1.0.2
-
-MCPCTL_DIR="$HOME/.mcpctl"
-WORKSPACE_DIR="$MCPCTL_DIR/workspaces"
-
-case "$1" in
-    --version|-v)
-        echo "mcpctl v1.0.2"
-        echo "MCP Hub Command Line Tool"
-        echo "Build: $(date +%Y%m%d)"
-        ;;
-    status)
-        echo "MCP Hub Status:"
-        if docker ps --format "table {{.Names}}\t{{.Ports}}\t{{.Status}}" | grep -q mcp; then
-            docker ps --format "table {{.Names}}\t{{.Ports}}\t{{.Status}}" | grep mcp
-        else
-            echo "No MCP services running"
-        fi
-        ;;
-    urls)
-        echo "Available MCP Service URLs:"
-        if docker ps --format "{{.Names}}\t{{.Ports}}" | grep -q mcp; then
-            docker ps --format "{{.Names}}\t{{.Ports}}" | grep mcp | while IFS=$'\t' read -r name ports; do
-                if [[ $ports == *":"* ]]; then
-                    port=$(echo "$ports" | grep -o '[0-9]*:' | head -1 | sed 's/://')
-                    echo "🌐 http://localhost:$port ($name)"
-                fi
-            done
-        else
-            echo "No services running"
-        fi
-        ;;
-    workspace)
-        case "$2" in
-            list)
-                echo "Available workspaces:"
-                if [ -d "$WORKSPACE_DIR" ]; then
-                    ls -1 "$WORKSPACE_DIR" 2>/dev/null | sed 's/^/  /'
-                else
-                    echo "  No workspaces found"
-                fi
-                ;;
-            *)
-                echo "Usage: mcpctl workspace list"
-                ;;
-        esac
-        ;;
-    setup)
-        echo "MCP Hub setup complete"
-        ;;
-    --help|-h|help)
-        echo "mcpctl - MCP Hub Command Line Tool"
-        echo ""
-        echo "Usage: mcpctl [command]"
-        echo ""
-        echo "Commands:"
-        echo "  status           Show service status"
-        echo "  urls             Show service URLs"
-        echo "  workspace list   List available workspaces"
-        echo "  setup           Initialize MCP Hub"
-        echo "  --version       Show version"
-        echo "  --help          Show this help"
-        ;;
-    *)
-        echo "mcpctl v1.0.2 - MCP Hub Command Line Tool"
-        echo "Run 'mcpctl --help' for usage information"
-        ;;
-esac
-EOF
-    
+    mv "$temp_file" "$BIN_DIR/mcpctl"
     chmod +x "$BIN_DIR/mcpctl"
-    success "Created functional mcpctl script"
+    log_success "Binary installed to $BIN_DIR/mcpctl"
 }
-
-# Create demo workspace with dynamic port handling
-create_demo_workspace() {
-    log "Creating demo workspace..."
+# Setup demo workspace
+setup_demo_workspace() {
+    log_step "Setting up demo workspace..."
+    cd "$WORKSPACE_DIR"
     
-    mkdir -p "$DEMO_WORKSPACE"
-    
-    # Create demo docker-compose.yml with dynamic port
-    cat > "$DEMO_WORKSPACE/docker-compose.yml" << EOF
-version: '3.8'
-services:
-  demo-mcp-server:
-    image: nginx:alpine
-    ports:
-      - "${DEMO_PORT}:80"
-    environment:
-      - MCP_SERVER_NAME=demo
-      - MCP_SERVER_DESCRIPTION=Demo MCP Server
-      - MCP_SERVER_PORT=${DEMO_PORT}
-    volumes:
-      - ./html:/usr/share/nginx/html:ro
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    restart: unless-stopped
-    container_name: mcp-demo-server
-EOF
-    
-    # Create demo HTML content with dynamic port
-    mkdir -p "$DEMO_WORKSPACE/html"
-    cat > "$DEMO_WORKSPACE/html/index.html" << EOF
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MCP Hub Demo Server</title>
-    <style>
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-            margin: 0; padding: 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh; color: white;
-        }
-        .container { 
-            max-width: 800px; margin: 0 auto; background: rgba(255,255,255,0.1); 
-            padding: 40px; border-radius: 20px; backdrop-filter: blur(10px);
-            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-        }
-        .success { color: #4ade80; font-weight: bold; }
-        .code { 
-            background: rgba(0,0,0,0.3); padding: 20px; border-radius: 10px; 
-            font-family: 'SF Mono', Monaco, monospace; margin: 20px 0; 
-            border-left: 4px solid #4ade80;
-        }
-        .badge { 
-            display: inline-block; padding: 5px 12px; background: #4ade80; 
-            color: #000; border-radius: 20px; font-size: 14px; font-weight: bold;
-        }
-        .port-info {
-            background: rgba(255,255,255,0.2); padding: 15px; border-radius: 10px;
-            margin: 20px 0; border-left: 4px solid #fbbf24;
-        }
-        h1 { margin-top: 0; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin: 30px 0; }
-        .card { background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🚀 MCP Hub Demo Server</h1>
-        <p class="success">✅ Your MCP server is running successfully!</p>
-        <span class="badge">ACTIVE</span>
-        
-        $(if [ "$DEMO_PORT" != "$DEFAULT_PORT" ]; then echo "<div class=\"port-info\">📡 <strong>Note:</strong> Running on port $DEMO_PORT (port $DEFAULT_PORT was in use)</div>"; fi)
-        
-        <div class="grid">
-            <div class="card">
-                <h3>🌐 Service Information</h3>
-                <ul>
-                    <li><strong>URL:</strong> http://localhost:${DEMO_PORT}</li>
-                    <li><strong>Status:</strong> Running</li>
-                    <li><strong>Version:</strong> 1.0.2</li>
-                    <li><strong>Type:</strong> Demo MCP Server</li>
-                </ul>
-            </div>
-            
-            <div class="card">
-                <h3>🔌 Claude Desktop Setup</h3>
-                <p>Connect this MCP server to Claude Desktop:</p>
-                <div class="code">
-1. Open Claude Desktop preferences<br>
-2. Add MCP server: http://localhost:${DEMO_PORT}<br>
-3. Save and restart Claude Desktop
-                </div>
-            </div>
-        </div>
-        
-        <h2>🛠️ Management Commands</h2>
-        <div class="code">
-mcpctl status      # Check service status<br>
-mcpctl urls        # Show all service URLs<br>
-mcpctl stop        # Stop services<br>
-mcpctl start       # Start services<br>
-mcpctl workspace list  # List workspaces
-        </div>
-        
-        <h2>🎯 Next Steps</h2>
-        <ul>
-            <li>✅ MCP server is running on port ${DEMO_PORT}</li>
-            <li>🔄 Configure Claude Desktop with the URL above</li>
-            <li>🚀 Start using MCP tools in Claude Desktop</li>
-            <li>📚 Create additional workspaces with <code>mcpctl workspace create</code></li>
-        </ul>
-        
-        <hr style="margin: 30px 0; border: none; height: 1px; background: rgba(255,255,255,0.3);">
-        <p style="text-align: center; opacity: 0.8;"><em>Generated by MCP Hub v1.0.2 • <a href="https://github.com/saxyguy81/mcp-hub" style="color: #4ade80;">Documentation</a></em></p>
-    </div>
-</body>
-</html>
-EOF
-
-    # Create workspace metadata
-    cat > "$DEMO_WORKSPACE/workspace.yml" << EOF
-name: demo
-description: Demo MCP workspace with sample server
-version: 1.0.2
-created: $(date -u +%Y-%m-%dT%H:%M:%SZ)
-port: ${DEMO_PORT}
-services:
-  - name: demo-mcp-server
-    type: demo
-    port: ${DEMO_PORT}
-    health_endpoint: /
-    image: nginx:alpine
-EOF
-    
-    success "Demo workspace created on port $DEMO_PORT"
-}
-
-# Enhanced PATH setup with immediate availability
-setup_path() {
-    log "Setting up PATH for immediate availability..."
-    
-    # Verify mcpctl exists before setting up PATH
-    if [ ! -f "$BIN_DIR/mcpctl" ]; then
-        error "mcpctl binary not found at $BIN_DIR/mcpctl"
-        return 1
-    fi
-    
-    local shell_rc=""
-    local shell_name=$(basename "$SHELL")
-    
-    case "$shell_name" in
-        "bash") 
-            if [ -f "$HOME/.bash_profile" ]; then
-                shell_rc="$HOME/.bash_profile"
-            else
-                shell_rc="$HOME/.bashrc"
-            fi
-            ;;
-        "zsh") shell_rc="$HOME/.zshrc" ;;
-        "fish") shell_rc="$HOME/.config/fish/config.fish" ;;
-        *) shell_rc="$HOME/.profile" ;;
-    esac
-    
-    # Add to shell config if not already present
-    if ! grep -q "$BIN_DIR" "$shell_rc" 2>/dev/null; then
-        echo "" >> "$shell_rc"
-        echo "# MCP Hub" >> "$shell_rc"
-        echo "export PATH=\"$BIN_DIR:\$PATH\"" >> "$shell_rc"
-        success "Added mcpctl to PATH in $shell_rc"
+    if [ -d "mcp-demo" ]; then
+        cd mcp-demo && git pull -q origin main || log_warning "Update failed"
     else
-        success "mcpctl already in PATH configuration"
+        git clone -q "https://github.com/$REPO.git" mcp-demo && cd mcp-demo
     fi
     
-    # CRITICAL: Ensure immediate availability in current session
-    # Method 1: Export PATH in current process
-    export PATH="$BIN_DIR:$PATH"
+    log_success "Demo workspace ready"
+}
+# === ENHANCEMENTS ===
+# v1.0.2 Enhancements - PATH and port conflict resolution
+# Check if port is available
+is_port_available() {
+    local port=$1
+    if command_exists netstat; then
+        ! netstat -ln 2>/dev/null | grep -q ":$port "
+    elif command_exists ss; then
+        ! ss -ln 2>/dev/null | grep -q ":$port "
+    elif command_exists lsof; then
+        ! lsof -i ":$port" >/dev/null 2>&1
+    else
+        # Python fallback
+        command_exists python3 && python3 -c "
+import socket; s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+try: s.bind(('localhost', $port)); s.close(); exit(0)
+except: exit(1)" 2>/dev/null
+    fi
+}
+# Find available port
+find_available_port() {
+    local port=$DEFAULT_PORT
+    local attempts=0
     
-    # Method 2: Create a symbolic link in a common PATH location if possible
-    local common_paths=("/usr/local/bin" "$HOME/.local/bin")
-    local symlink_created=false
+    while [ $attempts -lt $MAX_PORT_ATTEMPTS ]; do
+        if is_port_available $port; then
+            echo $port && return 0
+        fi
+        log_warning "Port $port in use, trying next..."
+        port=$((port + 1)); attempts=$((attempts + 1))
+    done
     
-    for common_path in "${common_paths[@]}"; do
-        if [ -d "$common_path" ] && [ -w "$common_path" ]; then
-            if ln -sf "$BIN_DIR/mcpctl" "$common_path/mcpctl" 2>/dev/null; then
-                success "Created symlink in $common_path for immediate access"
-                symlink_created=true
-                break
-            fi
+    log_error "No available port found" && exit 1
+}
+# Update docker-compose.yml
+update_docker_compose_port() {
+    local compose_file="$1" port="$2"
+    [ ! -f "$compose_file" ] && return
+    
+    cp "$compose_file" "$compose_file.backup"
+    sed -i.tmp "s/3002:3002/$port:3002/g" "$compose_file" 2>/dev/null
+    rm -f "$compose_file.tmp" 2>/dev/null || true
+    log_success "Updated compose file to port $port"
+}
+# Setup immediate PATH availability 
+setup_immediate_path() {
+    local bin_dir="$1"
+    log_step "Setting up immediate PATH availability..."
+    
+    # Strategy 1: Export PATH in current session
+    export PATH="$bin_dir:$PATH"
+    log_info "Added to current session PATH"
+    
+    # Strategy 2: Create symlinks in common locations
+    for location in "$HOME/.local/bin" "/usr/local/bin"; do
+        if [ -d "$location" ] && [ -w "$location" ]; then
+            ln -sf "$bin_dir/mcpctl" "$location/mcpctl" 2>/dev/null && \
+                log_info "Created symlink in $location"
+        elif mkdir -p "$location" 2>/dev/null; then
+            ln -sf "$bin_dir/mcpctl" "$location/mcpctl" 2>/dev/null && \
+                log_info "Created $location and symlink"
         fi
     done
     
-    # Method 3: Create ~/.local/bin if it doesn't exist and add symlink
-    if [ ! "$symlink_created" = true ]; then
-        mkdir -p "$HOME/.local/bin"
-        if ln -sf "$BIN_DIR/mcpctl" "$HOME/.local/bin/mcpctl" 2>/dev/null; then
-            success "Created symlink in ~/.local/bin"
-            # Add ~/.local/bin to PATH if not already there
-            if ! echo "$PATH" | grep -q "$HOME/.local/bin"; then
-                export PATH="$HOME/.local/bin:$PATH"
-                # Also add to shell config
-                if ! grep -q "\$HOME/.local/bin" "$shell_rc" 2>/dev/null; then
-                    echo "export PATH=\"\$HOME/.local/bin:\$PATH\"" >> "$shell_rc"
-                fi
-            fi
+    # Strategy 3: Update shell profiles
+    local path_export="export PATH=\"$bin_dir:\$PATH\""
+    for profile in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
+        if [ -f "$profile" ] && ! grep -q "$bin_dir" "$profile" 2>/dev/null; then
+            echo -e "\n# Added by MCP Hub installer\n$path_export" >> "$profile"
+            log_info "Updated $(basename $profile)"
         fi
-    fi
+    done
     
-    # Method 4: Source the shell config in a subshell to test
-    local test_result
-    case "$shell_name" in
-        "bash") test_result=$(bash -c "source $shell_rc && command -v mcpctl" 2>/dev/null || echo "") ;;
-        "zsh") test_result=$(zsh -c "source $shell_rc && command -v mcpctl" 2>/dev/null || echo "") ;;
-        *) test_result="" ;;
-    esac
+    # Strategy 4: Refresh shell hash
+    [ -n "${BASH_VERSION:-}" ] && hash -r 2>/dev/null || true
+    [ -n "${ZSH_VERSION:-}" ] && rehash 2>/dev/null || true
+}
+# Verify immediate PATH availability
+verify_immediate_path() {
+    local bin_dir="$1"
+    log_step "Verifying immediate PATH availability..."
     
-    # Final verification
-    if command -v mcpctl &> /dev/null; then
-        success "✨ mcpctl command is immediately available!"
-        local version=$(mcpctl --version 2>/dev/null | head -1 || echo "unknown")
-        success "Version: $version"
-    elif [ -n "$test_result" ]; then
-        success "mcpctl will be available after shell restart"
-        warning "For immediate use in this session, run: export PATH=\"$BIN_DIR:\$PATH\""
+    if [ -x "$bin_dir/mcpctl" ]; then
+        log_success "Binary is executable"
     else
-        warning "mcpctl installed but may need shell restart"
-        warning "For immediate use: export PATH=\"$BIN_DIR:\$PATH\""
-        warning "Or restart your terminal"
+        log_error "Binary not executable" && return 1
     fi
     
-    # Create helpful message for user
-    cat > "$INSTALL_DIR/PATH_SETUP.txt" << EOF
-MCP Hub PATH Setup Information
-=============================
+    if command_exists mcpctl; then
+        log_success "mcpctl found in PATH: $(command -v mcpctl)"
+        mcpctl --version >/dev/null 2>&1 && log_success "Execution test passed"
+    else
+        log_warning "mcpctl not in PATH, using direct binary"
+        "$bin_dir/mcpctl" --version >/dev/null 2>&1 && log_success "Direct execution works"
+    fi
+}
+# === VERSION CONFIG ===
+VERSION="v1.0.2"
+REPO="saxyguy81/mcp-hub"
+BIN_DIR="$HOME/.mcpctl/bin"
+WORKSPACE_DIR="$HOME/.mcpctl/workspace"
+DEFAULT_PORT=3002
+MAX_PORT_ATTEMPTS=10
 
-mcpctl has been installed to: $BIN_DIR/mcpctl
-
-PATH configuration added to: $shell_rc
-
-For immediate access (this session):
-  export PATH="$BIN_DIR:\$PATH"
-
-For permanent access:
-  Restart your terminal or run: source $shell_rc
-
-Verification:
-  command -v mcpctl
-  mcpctl --version
-EOF
+# Enhanced setup for demo workspace
+enhanced_setup_demo_workspace() {
+    setup_demo_workspace
+    local available_port=$(find_available_port)
+    if [ "$available_port" != "$DEFAULT_PORT" ]; then
+        log_warning "Using port $available_port instead of $DEFAULT_PORT"
+        update_docker_compose_port "docker-compose.yml" "$available_port"
+    fi
+    echo "$available_port" > "$WORKSPACE_DIR/.mcpctl-port"
+    log_success "Service will run on port $available_port"
 }
 
-# Enhanced service startup with port conflict handling
-start_services() {
-    log "Starting MCP services on port $DEMO_PORT..."
-    
-    # Double-check port availability before starting
-    if lsof -i :$DEMO_PORT &> /dev/null; then
-        warning "Port $DEMO_PORT became unavailable, finding new port..."
-        DEMO_PORT=$(find_available_port $((DEMO_PORT + 1)))
-        if [ "$DEMO_PORT" = "0" ]; then
-            error "No available ports found for services"
-            return 1
-        fi
-        success "Using port $DEMO_PORT instead"
-        
-        # Update docker-compose.yml with new port
-        sed -i.bak "s/\"[0-9]*:80\"/\"$DEMO_PORT:80\"/" "$DEMO_WORKSPACE/docker-compose.yml"
-        sed -i.bak "s/MCP_SERVER_PORT=[0-9]*/MCP_SERVER_PORT=$DEMO_PORT/" "$DEMO_WORKSPACE/docker-compose.yml"
-    fi
-    
-    # Ensure mcpctl is available
-    local mcpctl_cmd="$BIN_DIR/mcpctl"
-    if command -v mcpctl &> /dev/null; then
-        mcpctl_cmd="mcpctl"
-    fi
-    
-    # Initialize MCP Hub if not already done
-    "$mcpctl_cmd" setup &> /dev/null || true
-    
-    # Start the demo workspace
-    if [ -f "$DEMO_WORKSPACE/docker-compose.yml" ]; then
-        log "Starting demo workspace..."
-        cd "$DEMO_WORKSPACE"
-        
-        # Clean up any existing containers first
-        docker-compose down &> /dev/null || true
-        
-        if docker-compose up -d; then
-            success "Demo services started on port $DEMO_PORT"
-            
-            # Wait for service to be ready with timeout
-            local max_wait=30
-            local wait_count=0
-            log "Waiting for service to be ready..."
-            
-            while [ $wait_count -lt $max_wait ]; do
-                if curl -s --connect-timeout 2 "http://localhost:$DEMO_PORT" > /dev/null; then
-                    success "✨ Service is responding at http://localhost:$DEMO_PORT"
-                    break
-                fi
-                sleep 1
-                ((wait_count++))
-                if [ $((wait_count % 5)) -eq 0 ]; then
-                    log "Still waiting... ($wait_count/$max_wait seconds)"
-                fi
-            done
-            
-            if [ $wait_count -eq $max_wait ]; then
-                warning "Service started but not responding yet (may need more time)"
-                warning "Check status with: docker ps"
-            fi
-        else
-            error "Failed to start demo services"
-            error "Check port availability and Docker status"
-            log "Debug info:"
-            docker ps | head -5
-            return 1
-        fi
-        cd - > /dev/null
+# Show installer header
+show_installer_header() {
+    echo -e "${BOLD}${BLUE}"
+    echo "╔═══════════════════════════════════════════════════════════════╗"
+    echo "║                MCP Hub Bootstrap Installer v1.0.2            ║"
+    echo "║               Enhanced with Smart Port & PATH                 ║"
+    echo "║                                                               ║"
+    echo "║  🚀 One-line installation for MCP servers                    ║"
+    echo "║  🔧 Auto-dependency installation                              ║"
+    echo "║  🌐 Smart port conflict resolution                           ║"
+    echo "║  ⚡ Immediate PATH availability                               ║"
+    echo "║                                                               ║"
+    echo "╚═══════════════════════════════════════════════════════════════╝"
+    echo -e "${NC}"
+}
+
+# Enhanced installation flow
+enhanced_install_flow() {
+    local start_time=$(date +%s)
+    local platform=$(detect_platform)
+    log_info "Detected platform: $platform"
+    install_dependencies
+    install_mcpctl "$platform"
+    setup_immediate_path "$BIN_DIR"
+    verify_immediate_path "$BIN_DIR" || exit 1
+    enhanced_setup_demo_workspace
+    local service_port=$(cat "$WORKSPACE_DIR/.mcpctl-port" 2>/dev/null || echo "$DEFAULT_PORT")
+    local end_time=$(date +%s)
+    local duration=$((end_time - start_time))
+    echo -e "\n${BOLD}${GREEN}🎉 Installation Complete!${NC}"
+    echo -e "${BOLD}⏱️  Completed in ${duration}s${NC}"
+    echo -e "\n${BLUE}📋 Your MCP servers: http://localhost:$service_port${NC}"
+    echo -e "${BLUE}🔧 Test: mcpctl status${NC}"
+    if command_exists mcpctl; then
+        echo -e "${GREEN}✅ mcpctl immediately available!${NC}"
+    else
+        echo -e "${YELLOW}⚠️ Use: $BIN_DIR/mcpctl${NC}"
     fi
 }
 
-# Enhanced completion message with port information
-show_completion() {
-    echo
-    success "🎉 MCP Hub installation completed successfully!"
-    echo
-    
-    # Show port information
-    if [ "$DEMO_PORT" != "$DEFAULT_PORT" ]; then
-        echo "📡 Note: Demo server is running on port $DEMO_PORT"
-        echo "   (Port $DEFAULT_PORT was already in use)"
-        echo
-    fi
-    
-    echo "🔗 Your MCP servers are ready at:"
-    
-    # Check which services are actually running
-    if curl -s --connect-timeout 2 "http://localhost:$DEMO_PORT" > /dev/null; then
-        echo "🟢 http://localhost:$DEMO_PORT (Demo MCP Server - ACTIVE)"
-    else
-        echo "🟡 http://localhost:$DEMO_PORT (Demo MCP Server - Starting...)"
-    fi
-    
-    echo
-    echo "📋 Connect your LLM to: http://localhost:$DEMO_PORT"
-    echo
-    echo "For Claude Desktop:"
-    echo "1. Open Claude Desktop preferences"
-    echo "2. Add MCP server: http://localhost:$DEMO_PORT"
-    echo "3. Save and restart Claude Desktop"
-    echo
-    echo "💡 Useful commands:"
-    
-    # Show commands based on mcpctl availability
-    if command -v mcpctl &> /dev/null; then
-        echo "  mcpctl status        # Check what's running"
-        echo "  mcpctl urls          # Show all service URLs"
-        echo "  mcpctl --help        # See all available commands"
-    else
-        echo "  ~/.mcpctl/bin/mcpctl status   # Check what's running"
-        echo "  ~/.mcpctl/bin/mcpctl urls     # Show all service URLs"
-        echo "  ~/.mcpctl/bin/mcpctl --help   # See all available commands"
-        echo
-        echo "🔄 To use mcpctl without full path:"
-        echo "  export PATH=\"$BIN_DIR:\$PATH\""
-        echo "  # Or restart your terminal"
-    fi
-    
-    echo
-    echo "📖 Documentation: https://github.com/saxyguy81/mcp-hub"
-    
-    # Show available ports for additional services
-    if [ -n "$ALTERNATE_PORTS" ]; then
-        echo
-        echo "🚀 Additional available ports for more services: $ALTERNATE_PORTS"
-    fi
-    
-    echo
-    echo "✨ Installation completed in under 2 minutes with zero conflicts!"
-}
-
-# Main installation flow
+# Main function
 main() {
-    echo "🚀 MCP Hub Bootstrap Installer v1.0.2"
-    echo "Installing Model Context Protocol server management..."
-    echo "🆕 Enhanced with immediate PATH availability + smart port handling"
-    echo
-    
-    detect_platform
-    check_port_conflicts
-    check_dependencies
-    install_mcpctl
-    create_demo_workspace
-    setup_path
-    start_services
-    show_completion
+    show_installer_header
+    enhanced_install_flow
 }
 
-# Run main installation
-main
+# Run installer
+main "$@"
