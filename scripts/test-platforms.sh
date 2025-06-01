@@ -23,7 +23,7 @@ log_success() { echo -e "${GREEN}✅${NC} $1"; }
 log_error() { echo -e "${RED}❌${NC} $1"; }
 log_test() { echo -e "${BOLD}${BLUE}🧪 $1${NC}"; }
 
-# Platform detection function (copy from install.sh)
+# Platform detection function (from detect-platform.sh)
 detect_platform() {
     case "$(uname -s)" in
         Darwin*)
