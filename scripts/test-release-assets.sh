@@ -109,7 +109,7 @@ echo
 
 # Test each platform
 for platform in "${PLATFORMS[@]}"; do
-    test_binary_exists "$platform"
+    test_binary_exists "$platform" || true  # Continue even if individual test fails
 done
 
 # Summary
