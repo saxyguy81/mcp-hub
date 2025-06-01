@@ -6,7 +6,7 @@
   "main": "electron.js",
   "scripts": {
     "start": "vite",
-    "build": "vite build && electron-builder",
+    "build": "vite build && electron-builder --publish=never",
     "electron": "electron .",
     "pack": "electron-builder --dir",
     "dist": "electron-builder"

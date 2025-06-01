@@ -76,10 +76,5 @@
         "path": "/Applications"
       }
     ]
-  },
-  "publish": {
-    "provider": "github",
-    "owner": "saxyguy81",
-    "repo": "mcp-hub"
   }
 }
