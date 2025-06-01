@@ -4,13 +4,24 @@
 
 set -euo pipefail
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-BOLD='\033[1m'
-NC='\033[0m'
+# Detect if running in CI environment
+if [[ "${CI:-}" == "true" ]] || [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+    # Disable colors in CI
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    BOLD=''
+    NC=''
+else
+    # Enable colors for local development
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    BLUE='\033[0;34m'
+    BOLD='\033[1m'
+    NC='\033[0m'
+fi
 
 # Test tracking
 TESTS_PASSED=0
@@ -52,11 +63,11 @@ run_test() {
     log_test "Testing: $test_name"
     
     if [ "$actual" = "$expected" ]; then
-        log_success "$test_name → $actual ✓"
+        log_success "$test_name -> $actual (PASS)"
         ((TESTS_PASSED++))
         return 0
     else
-        log_error "$test_name → Expected: $expected, Got: $actual"
+        log_error "$test_name -> Expected: $expected, Got: $actual (FAIL)"
         FAILED_TESTS+=("$test_name")
         ((TESTS_FAILED++))
         return 1
@@ -68,20 +79,28 @@ mock_uname() {
     local system="$1"
     local machine="$2"
     
-    # Temporarily override uname
-    uname() {
-        case "$1" in
-            -s) echo "$system" ;;
-            -m) echo "$machine" ;;
-            *) command uname "$@" ;;
-        esac
-    }
+    # Create a temporary file to store the mock function
+    local temp_script=$(mktemp)
+    cat > "$temp_script" << EOF
+#!/bin/bash
+uname() {
+    case "\$1" in
+        -s) echo "$system" ;;
+        -m) echo "$machine" ;;
+        *) command uname "\$@" ;;
+    esac
+}
+
+$(declare -f detect_platform)
+
+detect_platform
+EOF
     
-    # Call detect_platform with mocked uname
-    detect_platform
+    # Execute in subshell to avoid function conflicts
+    bash "$temp_script"
     
-    # Restore original uname
-    unset -f uname
+    # Clean up
+    rm -f "$temp_script"
 }
 
 echo -e "${BOLD}${BLUE}🔬 MCP Hub Platform Detection Test Suite${NC}"

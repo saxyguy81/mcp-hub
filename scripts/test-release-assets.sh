@@ -4,13 +4,24 @@
 
 set -euo pipefail
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-BOLD='\033[1m'
-NC='\033[0m'
+# Detect if running in CI environment
+if [[ "${CI:-}" == "true" ]] || [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+    # Disable colors in CI
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    BOLD=''
+    NC=''
+else
+    # Enable colors for local development
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    BLUE='\033[0;34m'
+    BOLD='\033[1m'
+    NC='\033[0m'
+fi
 
 # Configuration
 REPO="saxyguy81/mcp-hub"
@@ -36,7 +47,7 @@ PLATFORMS=(
     "windows-amd64"
 )
 
-# Test binary availability
+# Test binary availability with more robust error handling
 test_binary_exists() {
     local platform="$1"
     local binary_name="mcpctl-$platform"
@@ -50,12 +61,14 @@ test_binary_exists() {
     
     log_test "Testing binary: $binary_name"
     
-    if curl -sSf -I "$url" >/dev/null 2>&1; then
+    # More robust curl with timeout and explicit error handling
+    if curl -sSf --max-time 10 --retry 2 -I "$url" >/dev/null 2>&1; then
         log_success "$binary_name exists and is accessible"
         ((TESTS_PASSED++))
         return 0
     else
-        log_error "$binary_name not found at $url"
+        local exit_code=$?
+        log_error "$binary_name not found at $url (curl exit code: $exit_code)"
         FAILED_TESTS+=("$binary_name")
         ((TESTS_FAILED++))
         return 1
