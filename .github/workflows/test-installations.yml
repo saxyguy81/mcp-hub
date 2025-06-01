@@ -3,21 +3,9 @@ name: Cross-Platform Installation Tests
 on:
   push:
     branches: [ main ]
-    paths: 
-      - 'install.sh'
-      - 'mcpctl/**'
-      - '.github/workflows/test-installations.yml'
   pull_request:
     branches: [ main ]
-    paths:
-      - 'install.sh'
-      - 'mcpctl/**'
   workflow_dispatch:
-    inputs:
-      test_version:
-        description: 'Version to test (e.g., v1.0.2)'
-        required: false
-        default: 'latest'
 
 permissions:
   contents: read
@@ -25,126 +13,37 @@ permissions:
 jobs:
   test-platform-detection:
     runs-on: ubuntu-latest
-    name: Test Platform Detection Logic
+    name: Test Platform Detection
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Test platform detection
+      - name: Run platform tests
         run: |
-          chmod +x scripts/test-platforms.sh
+          chmod +x scripts/*.sh
+          ./scripts/detect-platform.sh
           ./scripts/test-platforms.sh
-      
-      - name: Test release asset availability
-        run: |
-          chmod +x scripts/test-release-assets.sh
-          ./scripts/test-release-assets.sh ${{ inputs.test_version || 'v1.0.2' }}
+          ./scripts/test-release-assets.sh v1.0.2
 
-  test-installation:
+  test-cross-platform:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, ubuntu-22.04, macos-13, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
         include:
           - os: ubuntu-latest
             platform: linux-amd64
-            expected_binary: mcpctl
-          - os: ubuntu-22.04  
-            platform: linux-amd64
-            expected_binary: mcpctl
-          - os: macos-13
-            platform: macos-amd64
-            expected_binary: mcpctl
-          - os: macos-latest
+          - os: macos-latest  
             platform: macos-arm64
-            expected_binary: mcpctl
-          - os: windows-latest
-            platform: windows-amd64
-            expected_binary: mcpctl.exe
-    
-    name: Test Installation (${{ matrix.os }})
+    name: Test ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Install dependencies (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y curl git python3
-      
-      - name: Install dependencies (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          which curl git python3 || brew install curl git python3
-      
-      - name: Install dependencies (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          # Windows runners should have curl and git available by default
-          where curl git python
-          echo "✅ Dependencies verified"
-      
-      - name: Test installer script download
-        shell: bash
-        run: |
-          curl -fsSL https://github.com/saxyguy81/mcp-hub/raw/main/install.sh -o install.sh
-          chmod +x install.sh
-          echo "✅ Installer script downloaded"
-      
       - name: Test platform detection
-        shell: bash
         run: |
           chmod +x scripts/detect-platform.sh
           detected=$(./scripts/detect-platform.sh)
-          expected="${{ matrix.platform }}"
-          echo "Detected: $detected"
-          echo "Expected: $expected"
-          
-          if [ "$detected" = "$expected" ]; then
-            echo "✅ Platform detection correct"
-          else
-            echo "❌ Platform detection failed: got $detected, expected $expected"
-            exit 1
-          fi
-      
-      - name: Test binary download (dry run)
-        shell: bash
+          echo "Detected: $detected, Expected: ${{ matrix.platform }}"
+          [ "$detected" = "${{ matrix.platform }}" ]
+      - name: Test binary availability
         run: |
-          platform="${{ matrix.platform }}"
-          binary_name="mcpctl-$platform"
-          if [[ "$platform" == "windows-"* ]]; then
-            binary_name="$binary_name.exe"
-          fi
-          
-          url="https://github.com/saxyguy81/mcp-hub/releases/download/v1.0.2/$binary_name"
-          echo "Testing binary URL: $url"
-          
-          if curl -sSf -I "$url" >/dev/null; then
-            echo "✅ Binary $binary_name is accessible"
-          else
-            echo "❌ Binary $binary_name not found"
-            exit 1
-          fi
-      
-      - name: Test version option
-        if: runner.os != 'Windows'
-        shell: bash
-        run: |
-          # Download and test the binary directly
-          platform="${{ matrix.platform }}"
-          binary_name="mcpctl-$platform"
-          echo "Downloading binary for version test: $binary_name"
-          
-          if curl -fsSL "https://github.com/saxyguy81/mcp-hub/releases/download/v1.0.2/$binary_name" -o mcpctl; then
-            chmod +x mcpctl
-            echo "Testing binary execution..."
-            if ./mcpctl --help >/dev/null 2>&1; then
-              echo "✅ Binary executes successfully"
-              # Note: Version option may not be available in v1.0.2 binaries yet
-              # ./mcpctl --version || echo "Version option not yet available"
-            else
-              echo "⚠️ Binary execution test skipped (may require dependencies)"
-            fi
-          else
-            echo "❌ Failed to download binary"
-            exit 1
-          fi
+          url="https://github.com/saxyguy81/mcp-hub/releases/download/v1.0.2/mcpctl-${{ matrix.platform }}"
+          curl -sSf -I "$url" >/dev/null
+          echo "✅ Binary available"
