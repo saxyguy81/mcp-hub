@@ -39,10 +39,10 @@ jobs:
           - os: ubuntu-22.04-arm
             platform: linux
             arch: arm64
-          - os: macos-latest
+          - os: macos-13
             platform: macos
             arch: amd64
-          - os: macos-latest
+          - os: macos-14
             platform: macos
             arch: arm64
           - os: windows-latest
@@ -65,7 +65,16 @@ jobs:
       
       - name: Build CLI binary
         run: |
-          pyinstaller main.py -n mcpctl --onefile
+          if [ "${{ matrix.platform }}" = "macos" ] && [ "${{ matrix.arch }}" = "amd64" ]; then
+            # Build for Intel macOS
+            pyinstaller main.py -n mcpctl --onefile --target-arch x86_64
+          elif [ "${{ matrix.platform }}" = "macos" ] && [ "${{ matrix.arch }}" = "arm64" ]; then
+            # Build for Apple Silicon macOS
+            pyinstaller main.py -n mcpctl --onefile --target-arch arm64
+          else
+            # Default build for other platforms
+            pyinstaller main.py -n mcpctl --onefile
+          fi
       
       - name: Rename binary for release
         shell: bash
