@@ -1,0 +1,135 @@
+name: Cross-Platform Installation Tests
+
+on:
+  push:
+    branches: [ main ]
+    paths: 
+      - 'install.sh'
+      - 'mcpctl/**'
+      - '.github/workflows/test-installations.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'install.sh'
+      - 'mcpctl/**'
+  workflow_dispatch:
+    inputs:
+      test_version:
+        description: 'Version to test (e.g., v1.0.2)'
+        required: false
+        default: 'latest'
+
+permissions:
+  contents: read
+
+jobs:
+  test-platform-detection:
+    runs-on: ubuntu-latest
+    name: Test Platform Detection Logic
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Test platform detection
+        run: |
+          chmod +x scripts/test-platforms.sh
+          ./scripts/test-platforms.sh
+      
+      - name: Test release asset availability
+        run: |
+          chmod +x scripts/test-release-assets.sh
+          ./scripts/test-release-assets.sh ${{ inputs.test_version || 'v1.0.2' }}
+
+  test-installation:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, ubuntu-22.04, macos-13, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            platform: linux-amd64
+            expected_binary: mcpctl
+          - os: ubuntu-22.04  
+            platform: linux-amd64
+            expected_binary: mcpctl
+          - os: macos-13
+            platform: macos-amd64
+            expected_binary: mcpctl
+          - os: macos-latest
+            platform: macos-arm64
+            expected_binary: mcpctl
+          - os: windows-latest
+            platform: windows-amd64
+            expected_binary: mcpctl.exe
+    
+    name: Test Installation (${{ matrix.os }})
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y curl git python3
+      
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          which curl git python3 || brew install curl git python3
+      
+      - name: Install dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          choco install curl git python3 -y
+      
+      - name: Test installer script download
+        shell: bash
+        run: |
+          curl -fsSL https://github.com/saxyguy81/mcp-hub/raw/main/install.sh -o install.sh
+          chmod +x install.sh
+          echo "✅ Installer script downloaded"
+      
+      - name: Test platform detection
+        shell: bash
+        run: |
+          source install.sh
+          detected=$(detect_platform)
+          expected="${{ matrix.platform }}"
+          echo "Detected: $detected"
+          echo "Expected: $expected"
+          if [ "$detected" = "$expected" ]; then
+            echo "✅ Platform detection correct"
+          else
+            echo "❌ Platform detection failed: got $detected, expected $expected"
+            exit 1
+          fi
+      
+      - name: Test binary download (dry run)
+        shell: bash
+        run: |
+          platform="${{ matrix.platform }}"
+          binary_name="mcpctl-$platform"
+          if [[ "$platform" == "windows-"* ]]; then
+            binary_name="$binary_name.exe"
+          fi
+          
+          url="https://github.com/saxyguy81/mcp-hub/releases/download/v1.0.2/$binary_name"
+          echo "Testing binary URL: $url"
+          
+          if curl -sSf -I "$url" >/dev/null; then
+            echo "✅ Binary $binary_name is accessible"
+          else
+            echo "❌ Binary $binary_name not found"
+            exit 1
+          fi
+      
+      - name: Test version option
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          # Download and test the binary directly
+          platform="${{ matrix.platform }}"
+          binary_name="mcpctl-$platform"
+          curl -fsSL "https://github.com/saxyguy81/mcp-hub/releases/download/v1.0.2/$binary_name" -o mcpctl
+          chmod +x mcpctl
+          ./mcpctl --version || ./mcpctl -v
+          echo "✅ Version option works"

@@ -36,11 +36,26 @@ from .secret_backends.base import SecretBackend
 from .secret_backends.lastpass import LastPassBackend
 from .secret_backends.env import EnvBackend
 
+# Version information
+__version__ = "1.0.2"
+
 app = typer.Typer(
     name="mcpctl",
     help="MCP Hub - Manage Model Context Protocol servers via Docker containers",
     add_completion=False
 )
+
+def version_callback(value: bool):
+    if value:
+        typer.echo(f"mcpctl version {__version__}")
+        raise typer.Exit()
+
+@app.callback()
+def main(
+    version: Optional[bool] = typer.Option(None, "--version", "-v", callback=version_callback, is_eager=True, help="Show version and exit"),
+):
+    """MCP Hub - Manage Model Context Protocol servers via Docker containers"""
+    pass
 
 @dataclass
 class MCPConfig:
