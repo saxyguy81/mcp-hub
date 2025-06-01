@@ -8,6 +8,7 @@ import sys
 import json
 import subprocess
 import shutil
+import time
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, asdict
@@ -17,6 +18,7 @@ import toml
 import typer
 import docker
 from docker.errors import DockerException
+from . import container_engine
 
 from .compose_gen import ComposeGenerator
 from .discover import MCPDiscovery
@@ -199,16 +201,8 @@ def start(
         typer.echo("Run 'mcpctl generate' first.", err=True)
         raise typer.Exit(1)
     
-    client = get_docker_client()
-    
-    cmd = ["docker-compose", "-f", compose_file, "up"]
-    if detach:
-        cmd.append("-d")
-    if build:
-        cmd.append("--build")
-    
     try:
-        result = subprocess.run(cmd, check=True, capture_output=False)
+        container_engine.compose_up(compose_file, detach=detach, build=build)
         typer.echo("MCP Hub services started successfully!")
     except subprocess.CalledProcessError as e:
         typer.echo(f"Error starting services: {e}", err=True)
@@ -223,10 +217,8 @@ def stop(
         typer.echo(f"Compose file not found: {compose_file}", err=True)
         raise typer.Exit(1)
     
-    cmd = ["docker-compose", "-f", compose_file, "down"]
-    
     try:
-        subprocess.run(cmd, check=True)
+        container_engine.compose_down(compose_file)
         typer.echo("MCP Hub services stopped successfully!")
     except subprocess.CalledProcessError as e:
         typer.echo(f"Error stopping services: {e}", err=True)
@@ -241,15 +233,140 @@ def status(
         typer.echo(f"Compose file not found: {compose_file}", err=True)
         raise typer.Exit(1)
     
-    cmd = ["docker-compose", "-f", compose_file, "ps"]
-    
     try:
-        subprocess.run(cmd, check=True)
+        container_engine.compose_ps(compose_file)
     except subprocess.CalledProcessError as e:
         typer.echo(f"Error getting status: {e}", err=True)
         raise typer.Exit(1)
 
-@app.command("publish-images")
+@app.command()
+def add(
+    name: str = typer.Argument(..., help="Service name to add"),
+    image: str = typer.Option("", help="Docker image to use"),
+    port: int = typer.Option(8080, help="Port to expose"),
+    auto_start: bool = typer.Option(True, help="Start service after adding")
+):
+    """Add a new MCP service"""
+    config = load_config()
+    services_dir = Path(config.services_dir)
+    services_dir.mkdir(exist_ok=True)
+    
+    service_file = services_dir / f"{name}.yml"
+    
+    if service_file.exists():
+        if not typer.confirm(f"Service '{name}' already exists. Overwrite?"):
+            raise typer.Exit(1)
+    
+    # Use discovery if no image specified
+    if not image:
+        typer.echo(f"Discovering MCP server: {name}")
+        # This would use the discovery system - placeholder for now
+        image = f"ghcr.io/mcp-hub/{name}:latest"
+    
+    # Generate service definition
+    service_def = f"""services:
+  {name}:
+    image: {image}
+    ports:
+      - "{port}:8080"
+    environment:
+      - PORT=8080
+      - SERVICE_NAME={name}
+    networks:
+      - mcp-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+"""
+    
+    # Write service file
+    with open(service_file, 'w') as f:
+        f.write(service_def)
+    
+    typer.echo(f"Created service definition: {service_file}")
+    
+    # Regenerate compose file
+    typer.echo("Regenerating docker-compose.yml...")
+    generate()
+    
+    if auto_start:
+        typer.echo(f"Starting service '{name}'...")
+        try:
+            container_engine.compose_up("docker-compose.yml", services=[name])
+            typer.echo(f"Service '{name}' started successfully!")
+        except subprocess.CalledProcessError as e:
+            typer.echo(f"Error starting service: {e}", err=True)
+
+@app.command()
+def remove(
+    name: str = typer.Argument(..., help="Service name to remove"),
+    keep_data: bool = typer.Option(False, help="Keep service data volumes")
+):
+    """Remove an MCP service"""
+    config = load_config()
+    services_dir = Path(config.services_dir)
+    service_file = services_dir / f"{name}.yml"
+    
+    if not service_file.exists():
+        typer.echo(f"Service '{name}' not found", err=True)
+        raise typer.Exit(1)
+    
+    if not typer.confirm(f"Remove service '{name}'? This will stop and delete the container."):
+        raise typer.Exit(1)
+    
+    try:
+        # Stop the service
+        typer.echo(f"Stopping service '{name}'...")
+        container_engine.run(["compose", "stop", name])
+        
+        # Remove the container
+        if not keep_data:
+            container_engine.run(["compose", "rm", "-f", name])
+        
+        # Remove service definition
+        service_file.unlink()
+        typer.echo(f"Removed service definition: {service_file}")
+        
+        # Regenerate compose file
+        typer.echo("Regenerating docker-compose.yml...")
+        generate()
+        
+        typer.echo(f"Service '{name}' removed successfully!")
+        
+    except subprocess.CalledProcessError as e:
+        typer.echo(f"Error removing service: {e}", err=True)
+        raise typer.Exit(1)
+
+@app.command()
+def test(
+    name: str = typer.Argument(..., help="Service name to test"),
+    endpoint: str = typer.Option("/health", help="Health check endpoint")
+):
+    """Test if an MCP service is healthy"""
+    try:
+        # First check if service is running
+        result = container_engine.run(["compose", "ps", name], capture_output=True, text=True)
+        if name not in result.stdout:
+            typer.echo(f"❌ Service '{name}' is not running", err=True)
+            raise typer.Exit(1)
+        
+        # Test health endpoint
+        health_result = container_engine.exec_service(name, ["curl", "-fsSL", f"http://localhost:8080{endpoint}"])
+        
+        if health_result.returncode == 0:
+            typer.echo(f"✅ Service '{name}' is healthy")
+            typer.echo(f"Response: {health_result.stdout[:100]}...")
+        else:
+            typer.echo(f"❌ Service '{name}' health check failed")
+            typer.echo(f"Error: {health_result.stderr}")
+            raise typer.Exit(1)
+            
+    except subprocess.CalledProcessError as e:
+        typer.echo(f"❌ Error testing service '{name}': {e}", err=True)
+        raise typer.Exit(1)
 def publish_images(
     registry_url: str = typer.Option("", help="Registry URL (overrides config)"),
     tag: str = typer.Option("latest", help="Image tag"),
@@ -272,6 +389,82 @@ def publish_images(
             typer.echo(f"Images saved to tarball: {tarball_path}")
     except Exception as e:
         typer.echo(f"Error publishing images: {e}", err=True)
+        raise typer.Exit(1)
+
+@app.command()
+def daemon(
+    log_file: str = typer.Option("", help="Log file path (default: stdout)"),
+    restart_on_failure: bool = typer.Option(True, help="Auto-restart services on failure")
+):
+    """Run MCP Hub daemon for monitoring and auto-restart"""
+    import signal
+    import logging
+    import time
+    
+    # Set up logging
+    if log_file:
+        logging.basicConfig(
+            filename=log_file,
+            level=logging.INFO,
+            format='%(asctime)s - %(levelname)s - %(message)s'
+        )
+    else:
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(levelname)s - %(message)s'
+        )
+    
+    logger = logging.getLogger(__name__)
+    logger.info("MCP Hub daemon starting...")
+    
+    # Handle shutdown gracefully
+    def signal_handler(signum, frame):
+        logger.info("Received shutdown signal, stopping daemon...")
+        raise typer.Exit(0)
+    
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    try:
+        while True:
+            # Check if compose file exists
+            if not Path("docker-compose.yml").exists():
+                logger.warning("No docker-compose.yml found, generating...")
+                try:
+                    generate()
+                except Exception as e:
+                    logger.error(f"Failed to generate compose file: {e}")
+                    time.sleep(30)
+                    continue
+            
+            # Check service health
+            try:
+                result = container_engine.run(["compose", "ps", "--format", "json"], 
+                                            capture_output=True, text=True)
+                
+                # Parse and check each service
+                for line in result.stdout.strip().split('\n'):
+                    if line:
+                        try:
+                            service_info = json.loads(line)
+                            service_name = service_info.get('Service', '')
+                            state = service_info.get('State', '')
+                            
+                            if state != 'running' and restart_on_failure:
+                                logger.warning(f"Service {service_name} is {state}, restarting...")
+                                container_engine.compose_up("docker-compose.yml", 
+                                                           services=[service_name])
+                        except json.JSONDecodeError:
+                            continue
+                            
+            except subprocess.CalledProcessError as e:
+                logger.error(f"Error checking service status: {e}")
+            
+            # Wait before next check
+            time.sleep(60)
+            
+    except Exception as e:
+        logger.error(f"Daemon error: {e}")
         raise typer.Exit(1)
 
 @app.command()
