@@ -496,8 +496,17 @@ def publish_images(
     """Build and publish MCP server images"""
     config = load_config()
     
+    # Set registry URL from parameter or use default
     if registry_url:
         config.docker_registry = registry_url
+    elif not config.docker_registry:
+        # Default to GitHub Container Registry if no registry configured
+        config.docker_registry = "ghcr.io"
+        typer.echo(f"Using default registry: {config.docker_registry}")
+    
+    typer.echo(f"Publishing images to: {config.docker_registry}")
+    typer.echo(f"Image tag: {tag}")
+    typer.echo(f"Push to registry: {push}")
     
     registry_manager = RegistryManager(config)
     

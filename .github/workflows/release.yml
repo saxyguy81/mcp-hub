@@ -220,8 +220,8 @@ jobs:
       
       - name: Build and publish images
         run: |
-          ./dist/mcpctl publish-images --tag ${{ steps.version.outputs.VERSION }}
-          ./dist/mcpctl publish-images --tag latest
+          ./dist/mcpctl publish-images --registry-url ghcr.io/saxyguy81/mcp-hub --tag ${{ steps.version.outputs.VERSION }}
+          ./dist/mcpctl publish-images --registry-url ghcr.io/saxyguy81/mcp-hub --tag latest
 
   create-release:
     needs: [build-cli, build-electron, publish-images]

@@ -26,20 +26,32 @@ class RegistryManager:
             typer.echo("No MCP images found to push")
             return
         
-        typer.echo(f"Found {len(images)} MCP images to push")
+        # Set default registry if not configured
+        registry = self.config.docker_registry or "ghcr.io"
+        
+        typer.echo(f"Found {len(images)} MCP images to push to {registry}")
         
         for image in images:
             if not image.tags:
                 typer.echo(f"Skipping untagged image: {image.id[:12]}")
                 continue
                 
-            # Images should already be tagged for registry during build
+            # Push images that are already tagged for our registry
             for image_tag in image.tags:
-                if self.config.docker_registry in image_tag:
+                if registry in image_tag:
                     typer.echo(f"Pushing {image_tag}")
-                    repository, tag_part = image_tag.split(':') if ':' in image_tag else (image_tag, 'latest')
-                    self.client.images.push(repository, tag=tag_part)
-                    typer.echo(f"✅ Pushed {image_tag}")
+                    # Split tag to get repository and tag parts
+                    if ':' in image_tag:
+                        repository, tag_part = image_tag.rsplit(':', 1)
+                    else:
+                        repository, tag_part = image_tag, 'latest'
+                    
+                    try:
+                        self.client.images.push(repository, tag=tag_part)
+                        typer.echo(f"✅ Pushed {image_tag}")
+                    except Exception as e:
+                        typer.echo(f"❌ Failed to push {image_tag}: {e}")
+                        raise
     
     def save_images_tarball(self, tag: str = "latest") -> Path:
         """Build and save images as tarball for offline distribution"""
@@ -77,10 +89,16 @@ class RegistryManager:
         """Build MCP Hub Docker images"""
         typer.echo("🔨 Building MCP Hub Docker images...")
         
+        # Set default registry if not configured
+        registry = self.config.docker_registry or "ghcr.io"
+        
+        # Get repository name from GitHub context or default
+        repo_name = "saxyguy81/mcp-hub"  # Default, could be made configurable
+        
         # Build web service image
         web_dockerfile = Path("web/Dockerfile")
         if web_dockerfile.exists():
-            image_name = f"{self.config.docker_registry}/mcp-hub-web"
+            image_name = f"{registry}/{repo_name}/web"
             typer.echo(f"Building web service: {image_name}:{tag}")
             
             try:
@@ -113,15 +131,17 @@ class RegistryManager:
         all_images = self.client.images.list()
         mcp_images = []
         
+        # Set default registry if not configured
+        registry = self.config.docker_registry or "ghcr.io"
+        
         typer.echo(f"Scanning {len(all_images)} total images for MCP images...")
         
         for image in all_images:
             if image.tags:
                 for tag in image.tags:
-                    # Look for images with mcp-hub in the name or our registry prefix
-                    if ("mcp-hub" in tag.lower() or 
-                        "mcp" in tag.lower() or 
-                        (self.config.docker_registry and self.config.docker_registry in tag)):
+                    # Look for images with our registry and mcp-hub pattern, or general mcp pattern
+                    if (("mcp-hub" in tag.lower() or "mcp" in tag.lower()) or 
+                        (registry in tag and ("web" in tag or "mcp" in tag))):
                         mcp_images.append(image)
                         typer.echo(f"Found MCP image: {tag}")
                         break
