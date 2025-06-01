@@ -1,5 +1,9 @@
 # MCP Hub
 
+[![Build & Test](https://github.com/saxyguy81/mcp-hub/actions/workflows/build.yml/badge.svg)](https://github.com/saxyguy81/mcp-hub/actions/workflows/build.yml)
+[![Code Quality](https://github.com/saxyguy81/mcp-hub/actions/workflows/code-quality.yml/badge.svg)](https://github.com/saxyguy81/mcp-hub/actions/workflows/code-quality.yml)
+[![Cross-Platform Tests](https://github.com/saxyguy81/mcp-hub/actions/workflows/test-installations.yml/badge.svg)](https://github.com/saxyguy81/mcp-hub/actions/workflows/test-installations.yml)
+
 **The easiest way to manage Model Context Protocol servers**
 
 A comprehensive management system for MCP servers using Docker containers. Built for production deployment with enterprise-grade features and **true zero-configuration setup**.
