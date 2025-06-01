@@ -1,15 +1,15 @@
-# MCP Hub Proxy Configuration
-# Add these to services/mcp-proxy.yml
-
 services:
   mcp-proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile.proxy
     image: mcp-hub/proxy:latest
     ports:
       - "3000:3000"
     environment:
-      - COMPOSE_FILE=docker-compose.yml
       - PROXY_PORT=3000
       - LOG_LEVEL=INFO
+      - MCP_COMPOSE_FILE=/app/docker-compose.yml
     volumes:
       - ./docker-compose.yml:/app/docker-compose.yml:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -22,8 +22,10 @@ services:
       - "mcp-hub.service=proxy"
       - "mcp-hub.type=aggregator"
       - "mcp-hub.description=MCP protocol aggregation proxy"
+      - "mcp-hub.endpoint=http://localhost:3000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
       timeout: 5s
       retries: 3
+      start_period: 10s

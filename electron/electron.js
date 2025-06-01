@@ -510,6 +510,61 @@ ipcMain.handle('regenerateBridge', async () => {
   }
 });
 
+// Enhanced proxy management IPC handlers
+ipcMain.handle('executeCommand', async (event, args) => {
+  try {
+    const result = await executeMcpctl(args);
+    return { success: true, ...result };
+  } catch (error) {
+    console.error('Command execution error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('checkProxyStatus', async () => {
+  try {
+    return new Promise((resolve) => {
+      const req = http.get('http://localhost:3000/health', { timeout: 5000 }, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            const parsed = JSON.parse(data);
+            resolve({
+              running: true,
+              healthy: res.statusCode === 200,
+              data: parsed
+            });
+          } catch {
+            resolve({ running: false, healthy: false });
+          }
+        });
+      });
+
+      req.on('error', () => {
+        resolve({ running: false, healthy: false });
+      });
+
+      req.on('timeout', () => {
+        req.destroy();
+        resolve({ running: false, healthy: false });
+      });
+    });
+  } catch (error) {
+    return { running: false, healthy: false, error: error.message };
+  }
+});
+
+ipcMain.handle('openUrl', async (event, url) => {
+  try {
+    const { shell } = require('electron');
+    await shell.openExternal(url);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
 // App event handlers
 app.whenReady().then(() => {
   createWindow();

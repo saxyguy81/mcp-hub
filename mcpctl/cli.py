@@ -36,6 +36,13 @@ from .secret_backends.base import SecretBackend
 from .secret_backends.lastpass import LastPassBackend
 from .secret_backends.env import EnvBackend
 
+# Import proxy commands (adds proxy subcommand group)
+try:
+    from . import proxy_commands
+    # The proxy_commands module automatically adds itself to the main app
+except ImportError as e:
+    print(f"Warning: Proxy commands not available: {e}")
+
 # Version information
 __version__ = "1.0.2"
 

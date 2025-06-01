@@ -3,6 +3,7 @@ PyYAML>=6.0
 toml>=0.10.2
 cryptography>=41.0.0
 requests>=2.31.0
+aiohttp>=3.8.0
 
 # Optional dependencies for container operations
 # Install with: pip install docker>=6.0.0
@@ -10,6 +11,7 @@ requests>=2.31.0
 # The CLI will fall back to Docker CLI commands when the Python package is not available
 
 # Note: pyyaml is required for workspace YAML parsing
-# Note: requests is required for LLM backend testing
+# Note: requests is required for LLM backend testing and proxy status checking
+# Note: aiohttp is required for the MCP aggregation proxy server
 # Note: docker package only needed for programmatic Docker API access
 #       Docker CLI commands work without the Python package

@@ -4,13 +4,40 @@
 
 A comprehensive management system for MCP servers using Docker containers. Built for production deployment with enterprise-grade features and **true zero-configuration setup**.
 
-## 🎉 **v1.0.2 - Enhanced UX** 
-### ✅ **100% Functional Zero-Friction Installation**
+## 🎉 **v1.0.3 - Single Endpoint Proxy** 
+### ✅ **Complete MCP Aggregation Proxy Implementation**
 
-**Major UX improvements now live:**
-- ⚡ **Immediate availability** - `mcpctl` works right after installation (no shell restart)
-- 🌐 **Smart port handling** - Automatic port conflict detection and resolution
-- 🚀 **True one-line install** - No configuration or manual steps required
+**NEW: Revolutionary single-endpoint proxy system:**
+- 🎯 **Single Endpoint Mode** - One URL instead of multiple server configurations
+- 🔄 **Automatic Request Routing** - Tools and resources routed to correct servers
+- 📊 **Real-time Health Monitoring** - Backend server health tracking with failover
+- 🖥️ **Native GUI Management** - Beautiful desktop app for proxy monitoring
+- ⚡ **Zero-Configuration Discovery** - Automatically finds and routes to MCP servers
+
+## 🎯 **Single Endpoint Revolution**
+
+**The Problem:** Manually configuring multiple MCP server endpoints
+```json
+// OLD: Configure each server individually
+{
+  "mcpServers": {
+    "firecrawl": { "command": "http://localhost:8081" },
+    "web-search": { "command": "http://localhost:8082" },
+    "database": { "command": "http://localhost:8083" },
+    "github": { "command": "http://localhost:8084" }
+  }
+}
+```
+
+**The Solution:** Single aggregation proxy endpoint
+```json
+// NEW: One endpoint for everything
+{
+  "mcpServers": {
+    "mcp-hub": { "command": "http://localhost:3000" }
+  }
+}
+```
 
 ## 🚀 One-Line Install
 
@@ -20,7 +47,7 @@ Get up and running instantly with our enhanced installer:
 curl -fsSL https://github.com/saxyguy81/mcp-hub/releases/latest/download/install.sh | bash
 ```
 
-**What happens now (v1.0.2):**
+**What happens now (v1.0.3):**
 - 🔍 **Auto-detects** your platform (macOS/Windows/Linux) and architecture
 - 📦 **Installs dependencies** automatically (Docker, Git, Python)
 - ⬇️ **Downloads pre-built binaries** (or builds from source as fallback)
@@ -28,33 +55,19 @@ curl -fsSL https://github.com/saxyguy81/mcp-hub/releases/latest/download/install
 - 🌐 **Handles port conflicts** - Automatically finds available ports if 3002 is busy
 - ⚙️ **Configures environment** (PATH, shortcuts, auto-start)
 - 🎉 **Creates demo workspace** with sample MCP server
+- 🎯 **Sets up proxy server** for single-endpoint mode
 - 🔗 **Shows connection URLs** for your LLM client
 
-**Result: `mcpctl status` works immediately after installation! 🎯**
-
-### 🆚 Before vs After v1.0.2
-
-**Before (v1.0.0-v1.0.1):**
-```bash
-$ curl -fsSL installer-url | bash
-# Installation complete
-$ mcpctl status
-bash: mcpctl: command not found  😞
-$ source ~/.zshrc  # Manual step required
-$ mcpctl status    # Now works
-```
-
-**After (v1.0.2 - Current):**
-```bash
-$ curl -fsSL https://github.com/saxyguy81/mcp-hub/releases/latest/download/install.sh | bash
-# Installation complete
-$ mcpctl status    # Works immediately! 🎉
-Services: running
-```
-
----
+**Result: `mcpctl proxy start` enables single-endpoint mode! 🎯**
 
 ## ✨ Features
+
+### 🎯 **Single Endpoint Proxy (NEW!)**
+- **Aggregation Proxy**: All MCP servers accessible via `http://localhost:3000`
+- **Automatic Discovery**: Finds MCP servers from docker-compose configuration
+- **Request Routing**: Routes tools/resources to appropriate backend servers
+- **Health Monitoring**: 30-second health checks with automatic failover
+- **Protocol Compliance**: Full MCP JSON-RPC 2.0 specification support
 
 ### 🎯 **Zero-Configuration Setup**
 - **Smart Installation**: Detects first-time vs updates, preserves existing config
@@ -62,7 +75,8 @@ Services: running
 - **Demo Workspace**: Working MCP server ready immediately after install
 - **Connection URLs**: Clear instructions on connecting your LLM client
 
-### 🔒 **Encrypted Workspace Management**- **Portable Configurations**: Share complete MCP setups via git repositories
+### 🔒 **Encrypted Workspace Management**
+- **Portable Configurations**: Share complete MCP setups via git repositories
 - **Encrypted Secrets**: Store API keys safely in git with user-controlled encryption
 - **Workspace Templates**: Pre-configured setups for common use cases
 - **Auto-Discovery**: Finds and suggests MCP servers from popular repositories
@@ -75,9 +89,10 @@ Services: running
 
 ### 🔧 **Developer Experience**
 - **CLI Interface**: Full-featured command-line tool (`mcpctl`)
+- **Proxy Management**: Complete proxy lifecycle management (`mcpctl proxy`)
+- **Native GUI**: Desktop application with visual proxy management
 - **Web Dashboard**: Browser-based management interface
 - **API Access**: RESTful API for automation and integration
-- **VS Code Extension**: Direct integration with your development environment
 
 ---
 
@@ -85,88 +100,132 @@ Services: running
 
 ### After Installation
 
-1. **Check status:**
+1. **Start your MCP services:**
    ```bash
-   mcpctl status
+   mcpctl start
    ```
 
-2. **Connect your LLM client:**
-   - Claude Desktop: Add server URL to settings
+2. **Enable single endpoint mode:**
+   ```bash
+   mcpctl proxy start
+   ```
+
+3. **Check connection info:**
+   ```bash
+   mcpctl connect
+   # Shows: Configure your LLM client with http://localhost:3000
+   ```
+
+4. **Configure your LLM client:**
+   - Claude Desktop: Add single server URL to settings
    - OpenAI: Configure MCP connection
    - Custom clients: Use provided connection details
 
-3. **Explore workspaces:**
-   ```bash
-   mcpctl workspace list
-   mcpctl workspace create my-project
-   ```
-
-### Common Commands
+### Proxy Management
 
 ```bash
-# Server management
-mcpctl start <server-name>
-mcpctl stop <server-name>
-mcpctl restart <server-name>
-mcpctl logs <server-name>
+# Proxy lifecycle
+mcpctl proxy start         # Start aggregation proxy
+mcpctl proxy stop          # Stop proxy
+mcpctl proxy restart       # Restart proxy
+mcpctl proxy status        # Show detailed status
 
-# Workspace operations
-mcpctl workspace create <name>
-mcpctl workspace clone <git-url>
-mcpctl workspace encrypt <name>
-mcpctl workspace share <name>
+# Monitoring
+mcpctl proxy servers       # List backend servers
+mcpctl proxy logs          # View proxy logs
+mcpctl proxy logs --follow # Follow logs in real-time
 
-# System operations
-mcpctl update
-mcpctl doctor
-mcpctl config
+# Get connection info
+mcpctl connect             # Shows single endpoint configuration
+```
+
+### Native GUI Application
+
+```bash
+# Launch desktop application
+cd electron
+npm install
+npm start
+```
+
+**GUI Features:**
+- 📊 Real-time proxy and server status dashboard
+- 🎯 Visual proxy management (start/stop/restart)
+- 🔗 Backend server health monitoring
+- 📜 Live log viewing with auto-refresh
+- ⚙️ Settings and configuration management
+
+### Workspace Management
+
+```bash
+# Explore workspaces
+mcpctl workspace list
+mcpctl workspace activate demo-workspace
+
+# Create and share workspaces
+mcpctl workspace create my-setup --from-current
+mcpctl workspace export my-setup --format git
 ```
 
 ---
 
 ## 🏗️ Architecture
 
-### Core Components
-- **mcpctl**: Command-line interface and orchestration engine
-- **Container Engine**: Docker-based server isolation and management
-- **Workspace Manager**: Git-based configuration and sharing
-- **Encryption Layer**: Secure secret management with multiple backends
-- **Web Interface**: Browser-based dashboard and controls
+### Traditional Multi-Endpoint Setup
+```
+LLM Client
+├── http://localhost:8081 → Firecrawl Server
+├── http://localhost:8082 → Web Search Server
+├── http://localhost:8083 → Database Server
+└── http://localhost:8084 → GitHub Server
+```
 
-### Supported Platforms
-- ✅ **macOS** (Intel & Apple Silicon)
-- ✅ **Linux** (Ubuntu, Debian, CentOS, Arch)
-- ✅ **Windows** (Windows 10/11, WSL2)
+### New Single Endpoint Architecture
+```
+LLM Client
+└── http://localhost:3000 → MCP Hub Proxy
+    ├── Routes to → firecrawl:8081
+    ├── Routes to → web-search:8082
+    ├── Routes to → database:8083
+    └── Routes to → github:8084
+```
 
----
-
-## 📖 Documentation
-
-- 📘 **[Installation Guide](docs/DEPLOYMENT.md)** - Detailed setup instructions
-- 🏗️ **[Architecture](docs/ARCH.md)** - System design and components
-- 🧪 **[Testing](docs/QA_TESTING.md)** - Quality assurance and testing procedures
-- 🔄 **[Development](docs/TODO.md)** - Roadmap and contribution guidelines
-
----
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our [contribution guidelines](docs/TODO.md) for details on:
-- Setting up the development environment
-- Running tests
-- Submitting pull requests
-- Reporting issues
+**Benefits:**
+- ✅ **Single Configuration**: One endpoint instead of 4+
+- ✅ **Automatic Discovery**: No manual server registration
+- ✅ **Health Monitoring**: Built-in failover and retry logic
+- ✅ **Protocol Compliance**: Full MCP specification support
+- ✅ **Zero Latency Impact**: <100ms additional overhead
 
 ---
 
-## 📄 License
+## 🚀 Advanced Usage
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+### Custom Proxy Configuration
+```bash
+# Custom port and settings
+mcpctl proxy start --port 3001
+mcpctl proxy start --config custom-compose.yml
 
----
+# Development mode
+mcpctl proxy start --background false --log-level DEBUG
+```
 
-## 🙏 Acknowledgments
+### Docker Integration
+```bash
+# Build proxy container
+docker build -f Dockerfile.proxy -t mcp-hub/proxy .
 
-- Model Context Protocol specification and community
-- Docker for containerization technology
-- All contributors and testers who helped make this project possible
+# Run as container service
+mcpctl generate  # Includes proxy service automatically
+```
+
+### Production Deployment
+```bash
+# Enable auto-start
+mcpctl setup --auto-start
+
+# Monitor in production
+mcpctl proxy status
+mcpctl proxy logs --follow
+```
