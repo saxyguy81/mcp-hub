@@ -3,12 +3,15 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Copy requirements first for better caching
-COPY requirements.txt .
+COPY web/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY server.py .
-COPY ../scripts/install.sh ./scripts/install.sh
+COPY web/server.py .
+
+# Create scripts directory and copy install script
+RUN mkdir -p scripts
+COPY scripts/install.sh ./scripts/install.sh
 
 # Create non-root user
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
