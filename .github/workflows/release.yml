@@ -36,7 +36,7 @@ jobs:
           - os: ubuntu-latest
             platform: linux
             arch: amd64
-          - os: ubuntu-latest
+          - os: ubuntu-22.04-arm
             platform: linux
             arch: arm64
           - os: macos-latest
@@ -63,21 +63,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install typer docker pyinstaller pyyaml toml
       
-      - name: Set up cross-compilation for ARM64 (Linux)
-        if: matrix.platform == 'linux' && matrix.arch == 'arm64'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
-          pip install pyinstaller[encryption]
-      
       - name: Build CLI binary
         run: |
-          if [ "${{ matrix.platform }}" = "linux" ] && [ "${{ matrix.arch }}" = "arm64" ]; then
-            # Cross-compile for ARM64 Linux
-            pyinstaller main.py -n mcpctl --onefile --target-architecture aarch64
-          else
-            pyinstaller main.py -n mcpctl --onefile
-          fi
+          pyinstaller main.py -n mcpctl --onefile
       
       - name: Rename binary for release
         shell: bash
@@ -283,16 +271,14 @@ jobs:
           fi
       
       - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ steps.version.outputs.VERSION }}
-          release_name: MCP Hub ${{ steps.version.outputs.VERSION }}
-          body_path: release-notes.md
-          draft: false
-          prerelease: false
+        run: |
+          # Create release using GitHub CLI (modern approach)
+          gh release create ${{ steps.version.outputs.VERSION }} \
+            --title "MCP Hub ${{ steps.version.outputs.VERSION }}" \
+            --notes-file release-notes.md \
+            --latest
       
       - name: Upload Release Assets
         env:
