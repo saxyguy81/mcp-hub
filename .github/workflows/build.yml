@@ -1,0 +1,238 @@
+name: Build & Publish MCP Hub
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 5 * * *"  # Daily at 5 AM UTC
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: Test Python CLI
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install typer docker pyinstaller pyyaml toml pytest
+      
+      - name: Run Python tests
+        run: |
+          # Basic import test
+          python -c "from mcpctl.cli import app; print('CLI imports successfully')"
+          python -c "from mcpctl.container_engine import get_engine_info; print('Container engine module works')"
+
+  build-cli:
+    needs: test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: macos-latest
+            platform: macos
+          - os: windows-latest
+            platform: windows
+    
+    name: Build CLI (${{ matrix.platform }})
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install typer docker pyinstaller pyyaml toml
+      
+      - name: Build CLI binary
+        run: |
+          pyinstaller main.py -n mcpctl --onefile
+      
+      - name: Test CLI binary (Unix)
+        if: matrix.platform != 'windows'
+        run: |
+          ./dist/mcpctl --help
+          ./dist/mcpctl config
+      
+      - name: Test CLI binary (Windows)
+        if: matrix.platform == 'windows'
+        run: |
+          .\dist\mcpctl.exe --help
+          .\dist\mcpctl.exe config
+      
+      - name: Upload CLI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcpctl-${{ matrix.platform }}
+          path: dist/mcpctl*
+
+  build-electron:
+    needs: test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            platform: macos
+          - os: windows-latest
+            platform: windows
+    
+    name: Build Electron App (${{ matrix.platform }})
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      
+      - name: Set up Python (for CLI)
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install typer docker pyinstaller pyyaml toml
+      
+      - name: Build CLI for Electron
+        run: |
+          pyinstaller main.py -n mcpctl --onefile
+          mkdir -p electron/build/bin
+          cp dist/mcpctl* electron/build/bin/ || cp dist\\mcpctl* electron\\build\\bin\\ || true
+      
+      - name: Install Electron dependencies
+        run: |
+          cd electron
+          npm install
+      
+      - name: Build Electron app
+        run: |
+          cd electron
+          npm run build
+      
+      - name: Upload Electron artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-${{ matrix.platform }}
+          path: electron/dist/*
+
+  publish-images:
+    needs: [test, build-cli]
+    runs-on: ubuntu-latest
+    name: Build & Publish Container Images
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y docker.io
+          python -m pip install --upgrade pip
+          pip install typer docker pyinstaller pyyaml toml
+      
+      - name: Build CLI
+        run: |
+          pyinstaller main.py -n mcpctl --onefile
+      
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Build and publish images
+        if: github.event_name != 'pull_request'
+        run: |
+          ./dist/mcpctl publish-images --tag ${{ github.sha }}
+          ./dist/mcpctl publish-images --tag latest
+      
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum mcpctl > checksums.txt
+          cd ../electron/dist
+          find . -name "*.dmg" -o -name "*.msi" -o -name "*.zip" | xargs sha256sum >> ../../dist/checksums.txt
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            dist/
+            electron/dist/
+
+  create-release:
+    needs: [build-cli, build-electron, publish-images]
+    runs-on: ubuntu-latest
+    name: Create Release
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+      
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: nightly-${{ github.sha }}
+          release_name: Nightly Build ${{ github.sha }}
+          body: |
+            Automated nightly build of MCP Hub
+            
+            **Changes in this build:**
+            ${{ github.event.head_commit.message }}
+            
+            **Container Images:**
+            - `ghcr.io/${{ github.repository }}:${{ github.sha }}`
+            - `ghcr.io/${{ github.repository }}:latest`
+          draft: false
+          prerelease: true
+      
+      - name: Upload Release Assets
+        run: |
+          # Upload CLI binaries
+          for file in mcpctl-*/mcpctl*; do
+            if [ -f "$file" ]; then
+              gh release upload nightly-${{ github.sha }} "$file"
+            fi
+          done
+          
+          # Upload Electron installers
+          for file in electron-*/*; do
+            if [ -f "$file" ] && [[ "$file" =~ \.(dmg|msi|zip)$ ]]; then
+              gh release upload nightly-${{ github.sha }} "$file"
+            fi
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
