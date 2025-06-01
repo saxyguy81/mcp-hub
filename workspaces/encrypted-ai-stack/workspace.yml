@@ -1,0 +1,175 @@
+name: encrypted-ai-stack
+description: Complete AI development stack with encrypted secrets
+version: "1.0"
+author: MCP Hub Team
+created_at: "2024-05-31T12:00:00"
+updated_at: "2024-05-31T12:00:00"
+platforms:
+  - macos
+  - linux
+  - windows
+tags:
+  - ai
+  - development
+  - encrypted
+requirements:
+  docker: ">=20.0"
+  memory: "4GB"
+
+services:
+  firecrawl:
+    image: ghcr.io/mendableai/firecrawl-mcp-server:latest
+    environment:
+      - PORT=8080
+      - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY}
+    ports:
+      - "8081:8080"
+    restart: unless-stopped
+    networks:
+      - mcp-network
+    labels:
+      - "mcp-hub.service=firecrawl"
+      - "mcp-hub.type=web-scraping"
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=mcpdb
+      - POSTGRES_USER=mcpuser
+      - POSTGRES_PASSWORD=${DATABASE_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - mcp-network
+    labels:
+      - "mcp-hub.service=postgres"
+      - "mcp-hub.type=database"
+
+  openai-proxy:
+    image: ghcr.io/mcphub/openai-proxy:latest
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - PORT=8082
+    ports:
+      - "8082:8082"
+    restart: unless-stopped
+    networks:
+      - mcp-network
+    labels:
+      - "mcp-hub.service=openai-proxy"
+      - "mcp-hub.type=ai-proxy"
+
+networks:
+  mcp-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+    driver: local
+
+# Encrypted secrets (safe to commit to git)
+secrets:
+  encrypted: true
+  data: "gAAAAABhZ3R5X1JGQ0k5dGhpcyBpcyBhbiBlbmNyeXB0ZWQgZXhhbXBsZSBvZiBzZWNyZXRzIGRhdGEgdGhhdCB3b3VsZCBub3JtYWxseSBjb250YWluIHJlYWwgQVBJIGtleXMgYW5kIHBhc3N3b3JkcyBidXQgaXMgbm93IHNhZmUgdG8gc3RvcmUgaW4gZ2l0IHJlcG9zaXRvcmllcyBiZWNhdXNlIGl0J3MgZW5jcnlwdGVkIHdpdGggYSB1c2VyLWNvbnRyb2xsZWQga2V5"
+
+readme: |
+  # Encrypted AI Development Stack
+
+  A complete AI development environment with encrypted secrets for safe git storage.
+
+  ## 🔐 Encrypted Secrets
+
+  This workspace uses encrypted secrets that are safely stored in the git repository.
+  The actual secret values are encrypted with your personal encryption key.
+
+  **Secrets included:**
+  - `FIRECRAWL_API_KEY`: API key for Firecrawl web scraping service
+  - `DATABASE_PASSWORD`: Password for PostgreSQL database
+  - `OPENAI_API_KEY`: OpenAI API key for AI services
+
+  ## 🚀 Quick Setup
+
+  ### Method 1: One-Line Install
+  ```bash
+  curl -fsSL https://github.com/user/encrypted-ai-stack/raw/main/install.sh | bash
+  ```
+
+  ### Method 2: Manual Import
+  ```bash
+  # Install MCP Hub
+  curl -fsSL https://github.com/saxyguy81/mcp-hub/releases/latest/download/install.sh | bash
+
+  # Import this workspace
+  mcpctl workspace import https://github.com/user/encrypted-ai-stack.git --activate
+
+  # Start services
+  mcpctl up
+  ```
+
+  ## 🔑 Encryption Key
+
+  When you import this workspace, you'll be prompted for the encryption key:
+
+  1. **If you have LastPass**: The key will be retrieved automatically
+  2. **Manual entry**: You'll need the encryption key shared by the workspace creator
+
+  ## 📋 Services
+
+  Once running, you'll have:
+  - **Firecrawl**: Web scraping at http://localhost:8081
+  - **PostgreSQL**: Database at localhost:5432
+  - **OpenAI Proxy**: AI services at http://localhost:8082
+
+  ## 🔄 Development Workflow
+
+  ```bash
+  # Start all services
+  mcpctl up
+
+  # Check service status
+  mcpctl status
+
+  # View logs
+  mcpctl logs
+
+  # Stop services
+  mcpctl down
+  ```
+
+  ## 🔐 Managing Secrets
+
+  ```bash
+  # View encrypted secrets (masked)
+  mcpctl workspace decrypt encrypted-ai-stack --show-secrets
+
+  # Export decrypted secrets to file
+  mcpctl workspace decrypt encrypted-ai-stack --export-env
+
+  # Re-encrypt with new secrets
+  mcpctl workspace encrypt encrypted-ai-stack
+  ```
+
+  ## 🤝 Team Sharing
+
+  This workspace can be safely shared via git because:
+  - ✅ All secrets are encrypted
+  - ✅ Encryption key is not stored in git
+  - ✅ Each team member controls their own key
+  - ✅ Compatible across all platforms
+
+  ## 🆘 Troubleshooting
+
+  **Can't decrypt secrets?**
+  - Check you have the correct encryption key
+  - Try: `mcpctl workspace test-encryption`
+
+  **Services won't start?**
+  - Ensure Docker is running
+  - Check: `mcpctl status`
+  - View logs: `mcpctl logs [service-name]`
+
+  **Need to reset encryption?**
+  - Generate new key: `mcpctl workspace generate-key encrypted-ai-stack`
+  - Re-encrypt: `mcpctl workspace encrypt encrypted-ai-stack`

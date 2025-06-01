@@ -1,0 +1,66 @@
+name: web-scraping-kit
+description: Complete web scraping and data extraction toolkit
+version: "1.0"
+author: MCP Hub Team
+platforms:
+  - macos
+  - linux
+  - windows
+tags:
+  - web-scraping
+  - data-extraction
+  - automation
+requirements:
+  docker: ">=20.0"
+  memory: "2GB"
+
+services:
+  firecrawl:
+    image: ghcr.io/mendableai/firecrawl-mcp-server:latest
+    environment:
+      - PORT=8080
+      - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY}
+    ports:
+      - "8081:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - mcp-network
+    labels:
+      - "mcp-hub.service=firecrawl"
+      - "mcp-hub.type=web-scraping"
+
+networks:
+  mcp-network:
+    driver: bridge
+
+volumes:
+  scraping-data:
+    driver: local
+
+secrets:
+  FIRECRAWL_API_KEY: "API key for Firecrawl service (get from firecrawl.dev)"
+
+readme: |
+  # Web Scraping Kit
+
+  A complete toolkit for web scraping and data extraction using MCP servers.
+
+  ## Services Included
+
+  - **Firecrawl**: Professional web scraping with content extraction
+
+  ## Setup
+
+  1. Copy `secrets.env.template` to `secrets.env`
+  2. Get a Firecrawl API key from https://firecrawl.dev
+  3. Fill in your API key in `secrets.env`
+  4. Run: `mcpctl workspace activate web-scraping-kit`
+
+  ## Usage
+
+  Connect to Firecrawl via MCP endpoint: http://localhost:8081

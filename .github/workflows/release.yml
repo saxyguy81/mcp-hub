@@ -1,0 +1,314 @@
+name: Release MCP Hub
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # Trigger on version tags like v1.0.0
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: Test Before Release
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install typer docker pyinstaller pyyaml toml pytest
+      
+      - name: Run Python tests
+        run: |
+          python -c "from mcpctl.cli import app; print('CLI imports successfully')"
+          python -c "from mcpctl.container_engine import get_engine_info; print('Container engine module works')"
+
+  build-cli:
+    needs: test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+          - os: macos-latest
+            platform: macos
+            arch: x64
+          - os: macos-latest
+            platform: macos
+            arch: arm64
+          - os: windows-latest
+            platform: windows
+            arch: x64
+    
+    name: Build CLI (${{ matrix.platform }}-${{ matrix.arch }})
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install typer docker pyinstaller pyyaml toml
+      
+      - name: Build CLI binary
+        run: |
+          pyinstaller main.py -n mcpctl --onefile
+      
+      - name: Rename binary for release
+        shell: bash
+        run: |
+          cd dist
+          if [ "${{ matrix.platform }}" = "windows" ]; then
+            mv mcpctl.exe mcpctl-${{ matrix.platform }}-${{ matrix.arch }}.exe
+          else
+            mv mcpctl mcpctl-${{ matrix.platform }}-${{ matrix.arch }}
+          fi
+      
+      - name: Test CLI binary (Unix)
+        if: matrix.platform != 'windows'
+        run: |
+          chmod +x ./dist/mcpctl-${{ matrix.platform }}-${{ matrix.arch }}
+          ./dist/mcpctl-${{ matrix.platform }}-${{ matrix.arch }} --help
+      
+      - name: Test CLI binary (Windows)
+        if: matrix.platform == 'windows'
+        run: |
+          .\dist\mcpctl-${{ matrix.platform }}-${{ matrix.arch }}.exe --help
+      
+      - name: Upload CLI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcpctl-${{ matrix.platform }}-${{ matrix.arch }}
+          path: dist/mcpctl-*
+
+  build-electron:
+    needs: test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            platform: macos
+            arch: x64
+          - os: macos-latest  
+            platform: macos
+            arch: arm64
+          - os: windows-latest
+            platform: windows
+            arch: x64
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+    
+    name: Build Electron App (${{ matrix.platform }}-${{ matrix.arch }})
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      
+      - name: Set up Python (for CLI)
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install typer docker pyinstaller pyyaml toml
+      
+      - name: Build CLI for Electron
+        run: |
+          pyinstaller main.py -n mcpctl --onefile
+          mkdir -p electron/build/bin
+      
+      - name: Copy CLI binary (Unix)
+        if: matrix.platform != 'windows'
+        run: |
+          cp dist/mcpctl electron/build/bin/
+      
+      - name: Copy CLI binary (Windows)  
+        if: matrix.platform == 'windows'
+        run: |
+          cp dist/mcpctl.exe electron/build/bin/
+      
+      - name: Install Electron dependencies
+        run: |
+          cd electron
+          npm install
+      
+      - name: Set architecture for macOS builds
+        if: matrix.platform == 'macos'
+        run: |
+          cd electron
+          npm config set target_arch ${{ matrix.arch }}
+      
+      - name: Build Electron app
+        run: |
+          cd electron
+          npm run build
+      
+      - name: Rename build artifacts
+        shell: bash
+        run: |
+          cd electron/dist
+          for file in *; do
+            if [ -f "$file" ]; then
+              # Extract extension
+              extension="${file##*.}"
+              basename="${file%.*}"
+              
+              # Add platform and arch to filename
+              if [ "$extension" = "$file" ]; then
+                # No extension
+                mv "$file" "MCP-Hub-${{ matrix.platform }}-${{ matrix.arch }}"
+              else
+                mv "$file" "MCP-Hub-${{ matrix.platform }}-${{ matrix.arch }}.${extension}"
+              fi
+            fi
+          done
+      
+      - name: Upload Electron artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-${{ matrix.platform }}-${{ matrix.arch }}
+          path: electron/dist/*
+
+  publish-images:
+    needs: [test, build-cli]
+    runs-on: ubuntu-latest
+    name: Build & Publish Container Images
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install typer docker pyinstaller pyyaml toml
+      
+      - name: Build CLI
+        run: |
+          pyinstaller main.py -n mcpctl --onefile
+      
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      
+      - name: Build and publish images
+        run: |
+          ./dist/mcpctl publish-images --tag ${{ steps.version.outputs.VERSION }}
+          ./dist/mcpctl publish-images --tag latest
+
+  create-release:
+    needs: [build-cli, build-electron, publish-images]
+    runs-on: ubuntu-latest
+    name: Create GitHub Release
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+      
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      
+      - name: Generate checksums
+        run: |
+          mkdir -p release-assets
+          
+          # Collect all binaries
+          find . -name "mcpctl-*" -type f -exec cp {} release-assets/ \;
+          find . -name "MCP-Hub-*" -type f -exec cp {} release-assets/ \;
+          
+          # Generate checksums
+          cd release-assets
+          sha256sum * > checksums.txt
+          
+          # Create installation script
+          cp ../scripts/install.sh ./
+      
+      - name: Read CHANGELOG
+        id: changelog
+        run: |
+          if [ -f CHANGELOG.md ]; then
+            # Extract changelog for this version
+            awk '/^## \['${{ steps.version.outputs.VERSION }}'\]/{flag=1; next} /^## \[/{flag=0} flag' CHANGELOG.md > release-notes.md
+          else
+            echo "Release ${{ steps.version.outputs.VERSION }}" > release-notes.md
+            echo "" >> release-notes.md
+            echo "See commits for details: https://github.com/${{ github.repository }}/commits/${{ steps.version.outputs.VERSION }}" >> release-notes.md
+          fi
+      
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.version.outputs.VERSION }}
+          release_name: MCP Hub ${{ steps.version.outputs.VERSION }}
+          body_path: release-notes.md
+          draft: false
+          prerelease: false
+      
+      - name: Upload Release Assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd release-assets
+          
+          # Upload all release assets
+          for file in *; do
+            if [ -f "$file" ]; then
+              echo "Uploading $file..."
+              gh release upload ${{ steps.version.outputs.VERSION }} "$file" --clobber
+            fi
+          done
+      
+      - name: Update installation script URL
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The install.sh script is now available at:
+          # https://github.com/${{ github.repository }}/releases/latest/download/install.sh
+          echo "✅ Installation script available at:"
+          echo "curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/install.sh | bash"
+
+  update-homebrew:
+    needs: create-release
+    runs-on: macos-latest
+    name: Update Homebrew Formula (Future)
+    if: false  # Disable for now, enable when ready for Homebrew
+    steps:
+      - name: Placeholder for Homebrew formula update
+        run: |
+          echo "Future: Update Homebrew formula"
+          echo "Would update: brew install saxyguy81/tap/mcphub"

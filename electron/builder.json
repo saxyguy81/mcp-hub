@@ -1,18 +1,85 @@
 {
-  "appId": "com.example.mcphub",
+  "appId": "com.mcphub.desktop",
   "productName": "MCP Hub",
+  "copyright": "Copyright © 2024 MCP Hub",
   "files": [
-    "build/**/*",
-    "!**/*.map"
+    "dist/**/*",
+    "electron.js",
+    "preload.js",
+    "!**/*.map",
+    "!**/node_modules/.cache"
   ],
   "extraResources": [
-    { "from": "../dist/mcpctl*", "to": "bin/" }
+    { 
+      "from": "build/bin/mcpctl*", 
+      "to": "bin/",
+      "filter": ["**/*"]
+    }
   ],
-  "mac": { 
-    "target": [ "dmg" ], 
-    "category": "public.app-category.developer-tools" 
+  "directories": {
+    "output": "dist"
   },
-  "win": { 
-    "target": [ "msi" ] 
+  "mac": {
+    "target": [
+      {
+        "target": "dmg",
+        "arch": ["x64", "arm64"]
+      }
+    ],
+    "category": "public.app-category.developer-tools",
+    "icon": "build/icon.icns",
+    "hardenedRuntime": true,
+    "gatekeeperAssess": false,
+    "entitlements": "build/entitlements.mac.plist",
+    "entitlementsInherit": "build/entitlements.mac.plist"
+  },
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      }
+    ],
+    "icon": "build/icon.ico",
+    "publisherName": "MCP Hub",
+    "verifyUpdateCodeSignature": false
+  },
+  "linux": {
+    "target": [
+      {
+        "target": "AppImage",
+        "arch": ["x64"]
+      }
+    ],
+    "category": "Development",
+    "icon": "build/icon.png"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "MCP Hub"
+  },
+  "dmg": {
+    "title": "MCP Hub ${version}",
+    "icon": "build/icon.icns",
+    "contents": [
+      {
+        "x": 130,
+        "y": 220
+      },
+      {
+        "x": 410,
+        "y": 220,
+        "type": "link",
+        "path": "/Applications"
+      }
+    ]
+  },
+  "publish": {
+    "provider": "github",
+    "owner": "saxyguy81",
+    "repo": "mcp-hub"
   }
 }

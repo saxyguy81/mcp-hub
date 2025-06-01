@@ -1,236 +1,584 @@
 # MCP Hub
 
-A comprehensive management system for Model Context Protocol (MCP) servers using Docker containers. Built for production deployment with enterprise-grade features.
+**The easiest way to manage Model Context Protocol servers**
+
+A comprehensive management system for MCP servers using Docker containers. Built for production deployment with enterprise-grade features and zero-configuration setup.
+
+## 🚀 One-Line Install
+
+Get up and running instantly with our smart bootstrap installer:
+
+```bash
+curl -fsSL https://github.com/saxyguy81/mcp-hub/releases/latest/download/install.sh | bash
+```
+
+**What happens:**
+- 🔍 **Auto-detects** your platform (macOS/Windows/Linux) and architecture
+- 📦 **Installs dependencies** automatically (Docker, Git, Python)
+- ⬇️ **Downloads pre-built binaries** (or builds from source as fallback)
+- ⚙️ **Configures environment** (PATH, shortcuts, auto-start)
+- 🎉 **Creates demo workspace** with sample MCP server
+- 🔗 **Shows connection URLs** for your LLM client
+
+**First-time install:** Runs setup wizard and creates demo workspace  
+**Updates:** Preserves existing configuration and shows current status
+
+### Installation Options
+```bash
+# Build from source (slower but works everywhere)
+curl -fsSL https://github.com/saxyguy81/mcp-hub/releases/latest/download/install.sh | bash -s -- --build-from-source
+
+# Skip dependency installation (if already installed)
+curl -fsSL https://github.com/saxyguy81/mcp-hub/releases/latest/download/install.sh | bash -s -- --skip-deps
+
+# See all options
+curl -fsSL https://github.com/saxyguy81/mcp-hub/releases/latest/download/install.sh | bash -s -- --help
+```
+
+---
 
 ## ✨ Features
 
-### 🖥️ **Desktop Application**
-- **Setup Wizard**: Guided first-run experience with dependency checking
-- **LLM Backend Selection**: Support for Claude Desktop, OpenAI API, and custom endpoints
-- **Connection Testing**: Real-time LLM backend connectivity validation
-- **Settings Panel**: Centralized configuration management
+### 🎯 **Zero-Configuration Setup**
+- **Smart Installation**: Detects first-time vs updates, preserves existing config
+- **Auto-Dependency**: Installs Docker, Git, Python automatically via package managers
+- **Demo Workspace**: Working MCP server ready immediately after install
+- **Connection URLs**: Clear instructions on connecting your LLM client
 
-### 🐳 **Container Management** 
-- **Engine Abstraction**: Native support for both Docker and Vessel runtimes
-- **Service Discovery**: Automatically discover MCP servers in your codebase
+### 🔒 **Encrypted Workspace Management**
+- **Portable Configurations**: Share complete MCP setups via git repositories
+- **Encrypted Secrets**: Store API keys safely in git with user-controlled encryption
+- **Cross-Platform Sync**: Same workspace works on macOS, Windows, Linux
+- **Team Collaboration**: Share configurations securely without exposing secrets
+
+### 🧪 **LLM Backend Verification**
+- **Connection Testing**: Verify Claude Desktop, OpenAI API, and custom LLMs
+- **Interactive Setup**: Wizard-guided LLM configuration with real-time testing
+- **Detailed Diagnostics**: Clear error messages and troubleshooting suggestions
+- **Multiple Backends**: Support any OpenAI-compatible API endpoint
+
+### 🐳 **Container Management**
+- **Engine Abstraction**: Works with Docker Desktop, Docker CE, and Vessel
+- **Service Discovery**: Auto-detect MCP servers in your codebase
 - **Health Monitoring**: Built-in health checks and auto-restart capabilities
 - **Digest Locking**: Reproducible deployments with image digest pinning
 
-### 🔐 **Enterprise Security**
-- **Secret Management**: Support for LastPass and environment-based secrets
-- **Registry Support**: Push to GitHub Container Registry, GitLab, or offline tarballs
-- **Auto-start Integration**: LaunchAgents (macOS) and Registry keys (Windows)
+### 🖥️ **Desktop & CLI Apps**
+- **Electron GUI**: User-friendly desktop app with setup wizard
+- **Full CLI**: Complete command-line interface for automation
+- **Cross-Platform**: Native support for macOS, Windows, Linux
+- **Auto-Start**: Optional auto-start on system boot
 
-### 🛠️ **Developer Experience**
-- **CLI Tools**: Full command-line interface for CI/CD automation
-- **Cross-platform**: Native support for macOS, Windows, and Linux
-- **Background Daemon**: Monitoring and auto-restart capabilities
+---
 
-## 🚀 Quick Start
+## 🎯 Quick Start
 
-### Desktop Application Setup
-
-1. **Download** the latest release for your platform
-2. **Launch** MCP Hub and follow the setup wizard
-3. **Configure** your LLM backend (Claude/OpenAI/Custom)
-4. **Install** dependencies automatically (Docker, Git, Python)
-5. **Start** managing your MCP servers!
-
-### CLI Setup
-
+### 1. Install MCP Hub
 ```bash
-# Clone the repository
+curl -fsSL https://github.com/saxyguy81/mcp-hub/releases/latest/download/install.sh | bash
+```
+
+### 2. Connect Your LLM Client
+After installation, you'll see:
+```
+🔗 Your MCP servers are ready at:
+   🟢 http://localhost:3002
+
+📋 Connect your LLM to: http://localhost:3002
+```
+
+**For Claude Desktop:**
+1. Open Claude Desktop preferences
+2. Add MCP server: `http://localhost:3002`
+3. Save and restart Claude Desktop
+
+**For other LLM clients:**
+- Use the URL shown after installation
+- Configure as OpenAI-compatible endpoint
+- API key not required for local MCP servers
+
+### 3. Manage Your Services
+```bash
+# Check what's running
+mcpctl status
+
+# Start/stop services
+mcpctl start
+mcpctl stop
+
+# View connection URLs anytime
+mcpctl urls
+
+# Interactive setup
+mcpctl setup --wizard
+```
+
+---
+
+## 📦 Workspace Management
+
+### Create and Share Configurations
+```bash
+# Create workspace from current setup
+mcpctl workspace create my-ai-stack --from-current
+
+# Export for sharing (with encrypted secrets)
+mcpctl workspace export my-ai-stack --format git
+
+# Share via git repository
+cd my-ai-stack-git/my-ai-stack
+git init && git remote add origin https://github.com/user/my-config.git
+git add . && git commit -m "My MCP configuration"
+git push origin main
+```
+
+### Import and Use Shared Workspaces
+```bash
+# Import from git repository
+mcpctl workspace import https://github.com/user/my-config.git --activate
+
+# Import from file
+mcpctl workspace import my-config.tar.gz --activate
+
+# List available workspaces
+mcpctl workspace list
+
+# Switch between workspaces
+mcpctl workspace activate my-other-stack
+```
+
+### Encrypted Secrets System
+```bash
+# Create workspace with encrypted secrets
+mcpctl workspace create secure-stack --encrypt-secrets
+# 🔐 Enter encryption key: [hidden input]
+# 💾 Store in LastPass? y
+# ✅ Secrets encrypted and safe for git
+
+# View encrypted secrets (masked)
+mcpctl workspace decrypt secure-stack --show-secrets
+
+# Export decrypted secrets to file
+mcpctl workspace decrypt secure-stack --export-env
+```
+
+**Key Features:**
+- 🔒 **Secrets encrypted** in git repositories (AES-256)
+- 🔑 **User-controlled keys** via LastPass or manual entry
+- 🌍 **Cross-platform sync** with automatic decryption
+- 👥 **Team sharing** without exposing credentials
+
+---
+
+## 🧪 LLM Backend Testing
+
+### Test Your LLM Connections
+```bash
+# Test all configured backends
+mcpctl llm test
+
+# Test specific backend
+mcpctl llm test claude                    # Claude Desktop
+mcpctl llm test openai --api-key YOUR_KEY # OpenAI API
+mcpctl llm test custom --url https://api.your-provider.com --api-key YOUR_KEY
+
+# Interactive setup with testing
+mcpctl llm setup
+
+# Check current status
+mcpctl llm status
+```
+
+### Example Output
+```
+🧪 Testing LLM Backend Connections
+==================================
+
+Claude: ✅ PASS
+  Duration: 0.12s
+  ✅ Claude Desktop connected on port 52262
+
+Custom: ✅ PASS  
+  Duration: 1.23s
+  Status: 200
+  ✅ Custom LLM connection successful
+  Details:
+    endpoint: https://api.anthropic.com/v1/chat/completions
+    model: claude-3-sonnet
+    response: "Hello! This is a connection test response."
+
+📊 Summary: 2/2 backends working
+🎉 All tested backends are working!
+```
+
+---
+
+## 📋 CLI Reference
+
+### Essential Commands
+```bash
+# Installation & Setup
+mcpctl setup --wizard              # Interactive setup wizard
+mcpctl info                        # Show connection details
+mcpctl urls                        # Show all service URLs
+mcpctl status                      # Check service status
+
+# Service Management  
+mcpctl start                       # Start all services
+mcpctl stop                        # Stop all services
+mcpctl restart                     # Restart all services
+
+# Workspace Management
+mcpctl workspace create <name>     # Create new workspace
+mcpctl workspace list             # List workspaces
+mcpctl workspace activate <name>  # Switch workspace
+mcpctl workspace import <source>  # Import workspace
+
+# LLM Backend Testing
+mcpctl llm test                   # Test all backends
+mcpctl llm setup                  # Configure backends
+mcpctl llm status                 # Show backend status
+```
+
+### Advanced Commands
+```bash
+# Service Discovery & Management
+mcpctl discover                   # Find MCP servers in directory
+mcpctl add <service>             # Add new service
+mcpctl remove <service>          # Remove service
+
+# Production Features
+mcpctl lock-images               # Lock images to specific digests
+mcpctl pull-images               # Pull using locked digests
+mcpctl publish-images            # Publish to container registry
+
+# Secret Management
+mcpctl workspace encrypt <name>  # Encrypt workspace secrets
+mcpctl workspace decrypt <name>  # Decrypt workspace secrets
+mcpctl workspace generate-key    # Generate encryption key
+
+# Development & Testing
+mcpctl daemon                    # Run background daemon
+mcpctl test --all               # Run test suite
+```
+
+---
+
+## ⚙️ Configuration
+
+### Workspace Configuration
+Workspaces are stored in `~/.mcpctl/workspaces/` with this structure:
+```
+my-workspace/
+├── workspace.yml              # Metadata & encrypted secrets
+├── docker-compose.yml         # Service definitions  
+├── services/                  # Individual service configs
+├── secrets.env.template       # Secret placeholders (unencrypted)
+└── README.md                  # Documentation
+```
+
+### Global Configuration
+Stored in `~/.mcpctl/config.toml`:
+```toml
+# Git repository for shared configurations
+git_remote = "https://github.com/user/mcp-configs"
+
+# Container registry settings
+registry_driver = "ghcr"        # ghcr | gitlab | offline
+docker_registry = "ghcr.io"
+
+# Secret management
+secrets_backend = "env"         # lastpass | env
+
+# LLM backend settings
+openai_api_key = "sk-..."
+custom_llm_url = "https://api.provider.com"
+```
+
+### Environment Variables
+```bash
+# LLM Configuration
+export OPENAI_API_KEY="sk-your-openai-key"
+export CUSTOM_LLM_URL="https://api.your-provider.com"
+export CUSTOM_LLM_API_KEY="your-api-key"
+
+# MCP Hub Configuration  
+export MCPCTL_REGISTRY="ghcr.io"
+export MCPCTL_SECRETS_BACKEND="lastpass"
+```
+
+---
+
+## 🔧 Advanced Usage
+
+### Production Deployment
+```bash
+# Lock images for reproducible deployments
+mcpctl lock-images --compose-file docker-compose.yml
+
+# Deploy on production server
+mcpctl pull-images --lock-file images.lock.json
+mcpctl start
+
+# Enable auto-start on boot
+mcpctl setup --auto-start
+```
+
+### Team Collaboration
+```bash
+# Team lead creates standard environment
+mcpctl workspace create team-ai-stack --from-current --encrypt-secrets
+mcpctl workspace export team-ai-stack --format git
+# Push to company git repository
+
+# Team members sync
+mcpctl workspace import https://github.com/company/ai-stack.git --activate
+# Enter shared encryption key (or retrieve from LastPass)
+mcpctl start
+```
+
+### Multi-Environment Management
+```bash
+# Different environments
+mcpctl workspace create development
+mcpctl workspace create staging  
+mcpctl workspace create production
+
+# Switch between environments
+mcpctl workspace activate development
+mcpctl start
+
+mcpctl workspace activate production
+mcpctl start
+```
+
+### Container Registry Integration
+```bash
+# GitHub Container Registry
+mcpctl publish-images --registry ghcr.io --tag latest
+
+# GitLab Container Registry  
+mcpctl publish-images --registry registry.gitlab.com --tag v1.0.0
+
+# Offline deployment (air-gapped)
+mcpctl publish-images --offline --output images.tar.gz
+```
+
+---
+
+## 🏗️ Architecture
+
+### System Components
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   LLM Client    │    │  MCP Hub GUI    │    │  MCP Hub CLI    │
+│ (Claude Desktop)│    │  (Electron)     │    │   (Python)      │
+└─────────┬───────┘    └─────────┬───────┘    └─────────┬───────┘
+          │                      │                      │
+          │              ┌───────┴──────────────────────┴───────┐
+          │              │           MCP Hub Core               │
+          │              │  • Workspace Management             │
+          │              │  • Secret Encryption                │
+          │              │  • LLM Testing                      │
+          │              │  • Container Orchestration          │
+          │              └───────┬──────────────────────────────┘
+          │                      │
+    ┌─────┴─────┐         ┌──────┴──────┐
+    │MCP Server │◄────────┤   Docker    │
+    │Container  │         │  / Vessel   │
+    │           │         │             │
+    └───────────┘         └─────────────┘
+```
+
+### Project Structure
+```
+mcp-hub/
+├── mcpctl/                    # Python CLI package
+│   ├── cli.py                # Command-line interface
+│   ├── workspace.py          # Workspace management
+│   ├── encryption.py         # Secret encryption
+│   ├── llm_tester.py         # LLM backend testing
+│   ├── onboarding.py         # Installation flows
+│   ├── container_engine.py   # Docker/Vessel abstraction
+│   └── secret_backends/      # Secret management backends
+├── electron/                 # Desktop application
+│   ├── src/                  # React/TypeScript frontend
+│   ├── electron.js           # Main process
+│   └── preload.js           # IPC bridge
+├── scripts/                  # Installation & testing scripts
+│   ├── install.sh           # Bootstrap installer
+│   ├── test-*.sh           # Test scripts
+│   └── e2e-test.sh         # End-to-end tests
+├── workspaces/              # Example workspace templates
+├── docs/                    # Documentation
+└── web/                     # Download service (optional)
+```
+
+---
+
+## 🛠️ Development
+
+### Prerequisites
+- **Docker** or **Vessel** container runtime
+- **Git** version control  
+- **Python 3.8+** for CLI components
+- **Node.js 18+** for desktop application (optional)
+
+### Building from Source
+```bash
+# Clone repository
 git clone https://github.com/saxyguy81/mcp-hub.git
 cd mcp-hub
 
 # Install Python dependencies
 pip install -r requirements.txt
 
-# Initialize configuration
-python -m mcpctl.cli init
+# Build CLI binary (optional)
+pip install pyinstaller
+pyinstaller main.py -n mcpctl --onefile
 
-# Discover and start services
-python -m mcpctl.cli discover
-python -m mcpctl.cli generate
-python -m mcpctl.cli start
-```
-
-## 📋 CLI Commands
-
-### Core Management
-- `mcpctl init` - Initialize MCP Hub configuration
-- `mcpctl discover` - Find MCP servers in current directory
-- `mcpctl generate` - Create docker-compose.yml from service definitions
-- `mcpctl start/stop/status` - Manage running services
-
-### Service Operations
-- `mcpctl add <service>` - Add new MCP service
-- `mcpctl remove <service>` - Remove MCP service  
-- `mcpctl test <service>` - Test service health
-
-### Production Features
-- `mcpctl lock-images` - Lock images to specific digests
-- `mcpctl pull-images` - Pull using locked digests for reproducibility
-- `mcpctl regenerate-bridge` - Update OpenAPI bridge configuration
-- `mcpctl daemon` - Run background monitoring daemon
-
-## ⚙️ Configuration
-
-### Desktop App Configuration
-Configuration is managed through the Settings panel with tabs for:
-- **LLM & Tools**: Backend selection and testing
-- **General**: Git remotes, registry, and secrets
-- **Advanced**: Container engine and debug settings
-
-### CLI Configuration
-Configuration stored in `~/.mcpctl/config.toml`:
-
-```toml
-git_remote = "https://github.com/user/mcp-registry"
-registry_driver = "ghcr"  # ghcr | gitlab | offline  
-secrets_backend = "env"   # lastpass | env
-docker_registry = "ghcr.io"
-```
-
-## 🏗️ Architecture
-
-### Project Structure
-```
-mcp-hub/
-├── mcpctl/              # Python CLI package
-│   ├── cli.py          # Main command interface
-│   ├── container_engine.py  # Docker/Vessel abstraction
-│   ├── digest_manager.py    # Image digest locking
-│   └── secret_backends/     # Secret management
-├── electron/            # Desktop application
-│   ├── src/            # React/TypeScript frontend
-│   ├── electron.js     # Electron main process
-│   └── preload.js      # IPC bridge
-├── services/           # Service definitions
-├── docs/              # Documentation
-└── compose.template.yml # Base Docker Compose template
-```
-
-### Container Engine Support
-- **Docker**: Full Docker Desktop and Docker CE support
-- **Vessel**: macOS-optimized container runtime with compatibility layer
-- **Automatic Detection**: Runtime auto-discovery with fallback support
-
-### LLM Integration
-- **Claude Desktop**: Local connection via HTTP API
-- **OpenAI API**: Cloud-based ChatGPT integration
-- **Custom Endpoints**: Any OpenAI-compatible API endpoint
-
-## 🔒 Production Deployment
-
-### Image Digest Locking
-Ensure reproducible deployments across environments:
-
-```bash
-# Lock current image versions
-mcpctl lock-images --compose-file docker-compose.yml
-
-# Deploy with locked versions
-mcpctl pull-images --lock-file images.lock.json
-mcpctl start
-```
-
-### Auto-start Configuration
-Automatically start MCP Hub daemon on system boot:
-
-- **macOS**: LaunchAgents integration (`~/Library/LaunchAgents/`)
-- **Windows**: Registry Run keys (`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`)
-- **Linux**: systemd service files (planned)
-
-### Health Monitoring
-Built-in health checks with configurable intervals:
-
-```yaml
-healthcheck:
-  test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-  interval: 30s
-  timeout: 5s
-  retries: 3
-  start_period: 10s
-```
-
-## 🛠️ Development
-
-### Prerequisites
-- **Docker** or **Vessel** container runtime
-- **Git** version control
-- **Python 3.10+** for CLI components
-- **Node.js 18+** for desktop application
-
-### Building from Source
-
-```bash
-# CLI Development
-cd mcpctl/
-pip install -e .
-
-# Desktop App Development  
-cd electron/
+# Build desktop app (optional)
+cd electron
 npm install
-npm start          # Development server
-npm run build      # Production build
+npm run build
 ```
 
-### Container Engine Testing
-
+### Development Workflow
 ```bash
-# Test Docker integration
-mcpctl test-engine docker
+# CLI development
+cd mcpctl/
+python -m pip install -e .
 
-# Test Vessel integration  
-mcpctl test-engine vessel
+# Test CLI changes
+mcpctl --help
 
-# Auto-detect and test available engine
-mcpctl status
+# Desktop app development
+cd electron/
+npm start              # Development server
+npm run build          # Production build
+
+# Run tests
+./scripts/test-bootstrap.sh    # Bootstrap installer
+./scripts/test-workspace.sh    # Workspace system
+./scripts/test-encryption.sh   # Encrypted secrets
+./scripts/test-llm.sh          # LLM testing
 ```
+
+---
 
 ## 📚 Documentation
 
-- **[Architecture Guide](docs/ARCH.md)** - Technical architecture and design decisions
-- **[API Reference](docs/API.md)** - CLI and desktop app API documentation  
-- **[Contributing Guide](CONTRIBUTING.md)** - Development setup and guidelines
+### Guides
+- **[Installation Guide](docs/INSTALLATION.md)** - Detailed installation instructions
+- **[Workspace Guide](docs/WORKSPACES.md)** - Complete workspace management
+- **[Encrypted Secrets Guide](docs/ENCRYPTION.md)** - Secret encryption system
+- **[LLM Testing Guide](docs/LLM_TESTING.md)** - Backend verification
+- **[Architecture Guide](docs/ARCH.md)** - Technical architecture
+
+### Reference
+- **[CLI Reference](docs/CLI.md)** - Complete command reference
+- **[API Reference](docs/API.md)** - Desktop app API documentation
+- **[Configuration Reference](docs/CONFIG.md)** - All configuration options
 - **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues and solutions
+
+### Examples
+- **[Example Workspaces](workspaces/)** - Pre-built workspace templates
+- **[Team Setup](docs/examples/TEAM_SETUP.md)** - Team collaboration examples
+- **[Production Deployment](docs/examples/PRODUCTION.md)** - Production setup examples
+
+---
 
 ## 🧪 Testing
 
-Run the acceptance test suite to verify installation:
-
+### Quick Tests
 ```bash
-# Basic functionality test
-mcpctl test --all
+# Test installation
+curl -fsSL https://github.com/saxyguy81/mcp-hub/releases/latest/download/install.sh | bash --skip-deps
 
-# Desktop app UI test  
-npm test --prefix electron
+# Test CLI functionality
+mcpctl --help
+mcpctl workspace list
+mcpctl llm status
 
-# End-to-end workflow test
-./scripts/e2e-test.sh
+# Test LLM connections
+mcpctl llm test
 ```
+
+### Full Test Suite
+```bash
+# Run all tests
+./scripts/test-bootstrap.sh     # Installation system
+./scripts/test-workspace.sh     # Workspace management  
+./scripts/test-encryption.sh    # Encrypted secrets
+./scripts/test-llm.sh           # LLM verification
+./scripts/e2e-test.sh           # End-to-end workflow
+
+# Desktop app tests
+cd electron && npm test
+
+# CLI tests  
+python -m pytest mcpctl/tests/
+```
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for:
+
+- Development environment setup
+- Code style guidelines  
+- Testing requirements
+- Pull request process
+
+### Quick Start for Contributors
+```bash
+# Fork and clone
+git clone https://github.com/YOUR_USERNAME/mcp-hub.git
+cd mcp-hub
+
+# Set up development environment
+pip install -r requirements.txt
+pip install -e .
+
+# Make changes and test
+mcpctl --help
+./scripts/test-*.sh
+
+# Submit pull request
+git add .
+git commit -m "Your changes"
+git push origin your-branch
+# Create PR on GitHub
+```
+
+---
+
+## 🔗 Links & Resources
+
+### Project
+- **[GitHub Repository](https://github.com/saxyguy81/mcp-hub)**
+- **[Issue Tracker](https://github.com/saxyguy81/mcp-hub/issues)**
+- **[Release Notes](https://github.com/saxyguy81/mcp-hub/releases)**
+- **[Discussions](https://github.com/saxyguy81/mcp-hub/discussions)**
+
+### MCP Protocol
+- **[MCP Specification](https://modelcontextprotocol.io/docs)**
+- **[MCP Examples](https://github.com/modelcontextprotocol)**
+- **[Claude Desktop MCP](https://docs.anthropic.com/claude/docs/mcp)**
+
+### Community
+- **[Discord Server](https://discord.gg/mcp-hub)** (coming soon)
+- **[Twitter Updates](https://twitter.com/mcphub)** (coming soon)
+
+---
 
 ## 📄 License
 
 MIT License - see [LICENSE](LICENSE) for details.
 
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details on:
-
-- Setting up the development environment
-- Running tests
-- Submitting pull requests
-- Code style guidelines
-
-## 🔗 Links
-
-- **[GitHub Repository](https://github.com/saxyguy81/mcp-hub)**
-- **[Issue Tracker](https://github.com/saxyguy81/mcp-hub/issues)**
-- **[Release Notes](https://github.com/saxyguy81/mcp-hub/releases)**
-- **[MCP Protocol](https://modelcontextprotocol.io/docs)** - Learn about MCP
-
 ---
 
-**Built with ❤️ by the MCP Hub team**
+**Built with ❤️ for the MCP community**
+
+*Making Model Context Protocol servers as easy as `curl | bash`*
