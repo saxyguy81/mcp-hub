@@ -36,7 +36,7 @@ jobs:
           - os: ubuntu-latest
             platform: linux
             arch: amd64
-          - os: ubuntu-22.04-arm
+          - os: ubuntu-latest
             platform: linux
             arch: arm64
           - os: macos-13
@@ -160,7 +160,15 @@ jobs:
       - name: Rename build artifacts
         shell: bash
         run: |
-          cd electron/dist
+          if [ ! -d "electron/dist_electron" ]; then
+            echo "Error: electron/dist_electron directory not found"
+            echo "Available directories in electron/:"
+            ls -la electron/
+            exit 1
+          fi
+          cd electron/dist_electron
+          echo "Files in dist_electron before renaming:"
+          ls -la
           for file in *; do
             if [ -f "$file" ]; then
               extension="${file##*.}"
@@ -172,12 +180,14 @@ jobs:
               fi
             fi
           done
+          echo "Files in dist_electron after renaming:"
+          ls -la
       
       - name: Upload Electron artifacts
         uses: actions/upload-artifact@v4
         with:
           name: electron-${{ matrix.platform }}-${{ matrix.arch }}
-          path: electron/dist/*
+          path: electron/dist_electron/*
 
   create-release:
     needs: [build-cli, build-electron]
