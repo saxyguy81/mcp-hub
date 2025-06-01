@@ -16,9 +16,17 @@ import tomllib
 import toml
 
 import typer
-import docker
-from docker.errors import DockerException
 from . import container_engine
+
+# Make Docker import optional to avoid CI conflicts
+try:
+    import docker
+    from docker.errors import DockerException
+    DOCKER_AVAILABLE = True
+except ImportError:
+    DOCKER_AVAILABLE = False
+    docker = None
+    DockerException = Exception  # Fallback exception type
 
 from .compose_gen import ComposeGenerator
 from .discover import MCPDiscovery
@@ -84,6 +92,12 @@ def save_config(config: MCPConfig) -> None:
 
 def get_docker_client():
     """Get a Docker client instance"""
+    if not DOCKER_AVAILABLE:
+        typer.echo("❌ Docker Python package not available", err=True)
+        typer.echo("💡 Install with: pip install docker", err=True)
+        typer.echo("🔧 Or use Docker CLI fallback (automatic in most commands)", err=True)
+        raise typer.Exit(1)
+    
     try:
         return docker.from_env()
     except DockerException as e:
