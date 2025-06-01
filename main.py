@@ -3,7 +3,6 @@
 Entry point for mcpctl CLI
 """
 
-import os
 import sys
 from pathlib import Path
 

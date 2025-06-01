@@ -5,14 +5,14 @@ MCP Hub CLI - Main command interface for managing MCP server containers
 
 import json
 import os
-import shutil
 import subprocess
 import sys
 import time
 import tomllib
 from dataclasses import asdict, dataclass
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 import toml
 import typer
@@ -337,7 +337,7 @@ def info():
         print("📝 To connect your LLM client:")
         print(f"   1. Open your LLM application (Claude Desktop, etc.)")
         print(f"   2. Add MCP server: {connection_info['primary_url']}")
-        print(f"   3. Save and restart your LLM client")
+        print("   3. Save and restart your LLM client")
 
     else:
         print("❌ No MCP services configured")
@@ -395,8 +395,6 @@ def start(
 
         if show_urls:
             # Wait a moment for services to start
-            import time
-
             time.sleep(2)
 
             from .onboarding import get_connection_info
@@ -634,7 +632,6 @@ def daemon(
     """Run MCP Hub daemon for monitoring and auto-restart"""
     import logging
     import signal
-    import time
 
     # Set up logging
     if log_file:
