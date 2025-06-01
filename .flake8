@@ -9,6 +9,16 @@ exclude =
     electron,
     web,
     .venv,
-    .mypy_cache
+    .mypy_cache,
+    # Exclude any virtual environment directories
+    venv,
+    env,
+    .env,
+    # Exclude GitHub Actions and other CI directories
+    .github,
+    # Exclude common virtual env names
+    *_env,
+    test_env,
+    fresh_env
 per-file-ignores = 
     __init__.py:F401
