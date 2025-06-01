@@ -16,16 +16,30 @@ jobs:
     name: Test Platform Detection
     steps:
       - uses: actions/checkout@v4
-      - name: Run platform tests
+      
+      - name: Debug environment
         run: |
+          echo "🔍 Environment debugging..."
+          echo "PWD: $(pwd)"
+          ls -la scripts/ || echo "❌ scripts/ not found"
+          echo "Available tools:"
+          which curl bash chmod || echo "Basic tools check"
+          
+      - name: Test scripts step by step
+        run: |
+          echo "🔧 Setting permissions..."
           chmod +x scripts/*.sh
+          echo "🧪 Testing detect-platform.sh..."
           ./scripts/detect-platform.sh
+          echo "🧪 Running platform test suite..."
           ./scripts/test-platforms.sh
+          echo "🧪 Testing release asset availability..."
           ./scripts/test-release-assets.sh v1.0.2
 
   test-cross-platform:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
         include:
@@ -36,14 +50,26 @@ jobs:
     name: Test ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      
       - name: Test platform detection
         run: |
           chmod +x scripts/detect-platform.sh
           detected=$(./scripts/detect-platform.sh)
           echo "Detected: $detected, Expected: ${{ matrix.platform }}"
-          [ "$detected" = "${{ matrix.platform }}" ]
+          if [ "$detected" = "${{ matrix.platform }}" ]; then
+            echo "✅ Platform detection correct"
+          else
+            echo "❌ Platform detection failed"
+            exit 1
+          fi
+          
       - name: Test binary availability
         run: |
           url="https://github.com/saxyguy81/mcp-hub/releases/download/v1.0.2/mcpctl-${{ matrix.platform }}"
-          curl -sSf -I "$url" >/dev/null
-          echo "✅ Binary available"
+          echo "Testing URL: $url"
+          if curl -sSf -I "$url" >/dev/null; then
+            echo "✅ Binary available"
+          else
+            echo "❌ Binary not available"
+            exit 1
+          fi
