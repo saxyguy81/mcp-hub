@@ -486,6 +486,8 @@ def test(
     except subprocess.CalledProcessError as e:
         typer.echo(f"❌ Error testing service '{name}': {e}", err=True)
         raise typer.Exit(1)
+
+@app.command()
 def publish_images(
     registry_url: str = typer.Option("", help="Registry URL (overrides config)"),
     tag: str = typer.Option("latest", help="Image tag"),
