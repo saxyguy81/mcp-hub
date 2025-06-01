@@ -89,16 +89,18 @@ class RegistryManager:
         """Build MCP Hub Docker images"""
         typer.echo("🔨 Building MCP Hub Docker images...")
         
-        # Set default registry if not configured
-        registry = self.config.docker_registry or "ghcr.io"
-        
-        # Get repository name from GitHub context or default
-        repo_name = "saxyguy81/mcp-hub"  # Default, could be made configurable
+        # Use configured registry or default
+        if self.config.docker_registry:
+            # Registry was explicitly set (probably via --registry-url)
+            base_registry = self.config.docker_registry
+        else:
+            # Default registry
+            base_registry = "ghcr.io/saxyguy81/mcp-hub"
         
         # Build web service image
         web_dockerfile = Path("web/Dockerfile")
         if web_dockerfile.exists():
-            image_name = f"{registry}/{repo_name}/web"
+            image_name = f"{base_registry}/web"
             typer.echo(f"Building web service: {image_name}:{tag}")
             
             try:

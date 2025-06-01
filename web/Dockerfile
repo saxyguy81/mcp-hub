@@ -9,9 +9,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY web/server.py .
 
-# Create scripts directory and copy install script
+# Create scripts directory and copy install script (from repository root)
 RUN mkdir -p scripts
-COPY scripts/install.sh ./scripts/install.sh
+COPY install.sh ./scripts/install.sh
 
 # Create non-root user
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
