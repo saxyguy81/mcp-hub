@@ -190,8 +190,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Check Docker status
+        run: |
+          echo "Checking Docker installation..."
+          docker --version
+          docker info
+          echo "Docker is ready!"
       
       - name: Set up Python
         uses: actions/setup-python@v4
