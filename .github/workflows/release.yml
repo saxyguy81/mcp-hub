@@ -35,16 +35,19 @@ jobs:
         include:
           - os: ubuntu-latest
             platform: linux
-            arch: x64
+            arch: amd64
+          - os: ubuntu-latest
+            platform: linux
+            arch: arm64
           - os: macos-latest
             platform: macos
-            arch: x64
+            arch: amd64
           - os: macos-latest
             platform: macos
             arch: arm64
           - os: windows-latest
             platform: windows
-            arch: x64
+            arch: amd64
     
     name: Build CLI (${{ matrix.platform }}-${{ matrix.arch }})
     steps:
@@ -60,9 +63,21 @@ jobs:
           python -m pip install --upgrade pip
           pip install typer docker pyinstaller pyyaml toml
       
+      - name: Set up cross-compilation for ARM64 (Linux)
+        if: matrix.platform == 'linux' && matrix.arch == 'arm64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          pip install pyinstaller[encryption]
+      
       - name: Build CLI binary
         run: |
-          pyinstaller main.py -n mcpctl --onefile
+          if [ "${{ matrix.platform }}" = "linux" ] && [ "${{ matrix.arch }}" = "arm64" ]; then
+            # Cross-compile for ARM64 Linux
+            pyinstaller main.py -n mcpctl --onefile --target-architecture aarch64
+          else
+            pyinstaller main.py -n mcpctl --onefile
+          fi
       
       - name: Rename binary for release
         shell: bash
@@ -99,16 +114,16 @@ jobs:
         include:
           - os: macos-latest
             platform: macos
-            arch: x64
+            arch: amd64
           - os: macos-latest  
             platform: macos
             arch: arm64
           - os: windows-latest
             platform: windows
-            arch: x64
+            arch: amd64
           - os: ubuntu-latest
             platform: linux
-            arch: x64
+            arch: amd64
     
     name: Build Electron App (${{ matrix.platform }}-${{ matrix.arch }})
     steps:
