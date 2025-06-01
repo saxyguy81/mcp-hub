@@ -20,8 +20,8 @@ detect_platform() {
     case "$(uname -s)" in
         Darwin*)
             case "$(uname -m)" in
-                x86_64) echo "darwin-amd64" ;;
-                arm64) echo "darwin-arm64" ;;
+                x86_64) echo "macos-amd64" ;;
+                arm64) echo "macos-arm64" ;;
                 *) log_error "Unsupported macOS: $(uname -m)" && exit 1 ;;
             esac ;;
         Linux*)
