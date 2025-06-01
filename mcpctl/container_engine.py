@@ -8,20 +8,25 @@ import subprocess
 import time
 from typing import List, Any, Optional
 
-def _detect_engine() -> str:
-    """Detect available container engine"""
-    if shutil.which("docker"):
-        return "docker"
-    if shutil.which("vessel"):
-        return "vessel"
-    raise RuntimeError("Neither docker nor vessel found. Please install Docker Desktop or Vessel.")
+# Global engine detection (lazy)
+_ENGINE = None
 
-# Global engine detection
-ENGINE = _detect_engine()
+def detect_engine() -> str:
+    """Detect available container engine (lazy initialization)"""
+    global _ENGINE
+    if _ENGINE is None:
+        if shutil.which("docker"):
+            _ENGINE = "docker"
+        elif shutil.which("vessel"):
+            _ENGINE = "vessel"
+        else:
+            raise RuntimeError("Neither docker nor vessel found. Please install Docker Desktop or Vessel.")
+    return _ENGINE
 
 def run(cmd: List[str], **kwargs) -> subprocess.CompletedProcess:
     """Execute container engine command"""
-    full_cmd = [ENGINE] + cmd
+    engine = detect_engine()
+    full_cmd = [engine] + cmd
     return subprocess.run(full_cmd, check=True, **kwargs)
 
 def compose_up(compose_file: str = "docker-compose.yml", detach: bool = True, 
@@ -62,7 +67,7 @@ def health_check(service_name: str) -> bool:
 
 def start_vessel_compat_if_needed() -> None:
     """Start Vessel Docker compatibility daemon if using Vessel on macOS"""
-    if ENGINE == "vessel":
+    if detect_engine() == "vessel":
         try:
             run(["compat"], timeout=10)
             time.sleep(4)  # Wait for dockerd socket to be available
@@ -72,16 +77,25 @@ def start_vessel_compat_if_needed() -> None:
 
 def get_engine_info() -> dict:
     """Get information about the container engine"""
-    return {
-        "engine": ENGINE,
-        "version": _get_version(),
-        "available": True
-    }
+    try:
+        engine = detect_engine()
+        return {
+            "engine": engine,
+            "version": _get_version(),
+            "available": True
+        }
+    except RuntimeError as e:
+        return {
+            "engine": None,
+            "version": None,
+            "available": False,
+            "error": str(e)
+        }
 
 def _get_version() -> str:
     """Get container engine version"""
     try:
         result = run(["--version"], capture_output=True, text=True)
         return result.stdout.strip()
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, RuntimeError):
         return "unknown"
