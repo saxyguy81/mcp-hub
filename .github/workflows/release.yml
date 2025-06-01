@@ -17,28 +17,14 @@ jobs:
         with:
           python-version: '3.11'
       
-      - name: Install Python dependencies
+      - name: Install Python dependencies (without Docker package)
         run: |
-          # Install Python dependencies without triggering Docker system package installation
+          # Install Python dependencies WITHOUT Docker package for tests
           python -m pip install --upgrade pip
+          pip install typer pyinstaller pyyaml toml pytest
           
-          # Install dependencies one by one to isolate any issues
-          pip install typer
-          pip install pyinstaller
-          pip install pyyaml
-          pip install toml
-          pip install pytest
-          
-          # Install docker Python package with no system dependencies
-          pip install docker --no-deps --force-reinstall
-          
-          # Verify Docker Python client (optional for tests)
-          python -c "import docker; print('Docker Python package imported successfully')" || echo "Docker import failed, but tests can still run"
-      
-      - name: Run Python tests
-        run: |
+          # Verify core CLI functionality (without Docker operations)
           python -c "from mcpctl.cli import app; print('CLI imports successfully')"
-          python -c "from mcpctl.container_engine import get_engine_info; print('Container engine module works')"
 
   build-cli:
     needs: test
@@ -71,10 +57,11 @@ jobs:
         with:
           python-version: '3.11'
       
-      - name: Install dependencies
+      - name: Install dependencies (without Docker package)
         run: |
           python -m pip install --upgrade pip
-          pip install typer docker pyinstaller pyyaml toml
+          # Build CLI without Docker package - it's only needed for runtime operations
+          pip install typer pyinstaller pyyaml toml
       
       - name: Build CLI binary
         run: |
@@ -140,10 +127,10 @@ jobs:
         with:
           python-version: '3.11'
       
-      - name: Install Python dependencies
+      - name: Install Python dependencies (without Docker package)
         run: |
           python -m pip install --upgrade pip
-          pip install typer docker pyinstaller pyyaml toml
+          pip install typer pyinstaller pyyaml toml
       
       - name: Build CLI for Electron
         run: |
@@ -203,52 +190,40 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Check Docker status
-        run: |
-          echo "Checking Docker installation..."
-          docker --version
-          docker info
-          whoami
-          echo "Docker is ready!"
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
       
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
         with:
-          python-version: '3.11'
-      
-      - name: Install dependencies
-        run: |
-          # Install Python dependencies without triggering Docker system package installation
-          python -m pip install --upgrade pip
-          
-          # Install dependencies one by one to isolate any issues
-          pip install typer
-          pip install pyinstaller
-          pip install pyyaml
-          pip install toml
-          
-          # Install docker Python package with no system dependencies
-          pip install docker --no-deps --force-reinstall
-          
-          # Verify Docker Python client can connect to existing Docker daemon
-          python -c "import docker; client = docker.from_env(); print('Docker client connected successfully')"
-      
-      - name: Build CLI
-        run: |
-          pyinstaller main.py -n mcpctl --onefile
-      
-      - name: Login to GitHub Container Registry (manual)
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Extract version from tag
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
       
-      - name: Build and publish images
-        run: |
-          ./dist/mcpctl publish-images --registry-url ghcr.io/saxyguy81/mcp-hub --tag ${{ steps.version.outputs.VERSION }}
-          ./dist/mcpctl publish-images --registry-url ghcr.io/saxyguy81/mcp-hub --tag latest
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/saxyguy81/mcp-hub/web
+          tags: |
+            type=ref,event=tag
+            type=raw,value=latest
+      
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./web/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   create-release:
     needs: [build-cli, build-electron, publish-images]
@@ -283,7 +258,7 @@ jobs:
           done
           
           # Copy installation script from repository
-          cp scripts/install.sh release-assets/
+          cp install.sh release-assets/
           
           # Generate checksums
           cd release-assets

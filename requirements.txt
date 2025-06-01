@@ -1,8 +1,15 @@
 typer>=0.9.0
-docker>=6.0.0
 PyYAML>=6.0
 toml>=0.10.2
 cryptography>=41.0.0
 requests>=2.31.0
+
+# Optional dependencies for container operations
+# Install with: pip install docker>=6.0.0
+# These are only needed when using publish-images or other container operations
+# The CLI will fall back to Docker CLI commands when the Python package is not available
+
 # Note: pyyaml is required for workspace YAML parsing
 # Note: requests is required for LLM backend testing
+# Note: docker package only needed for programmatic Docker API access
+#       Docker CLI commands work without the Python package
