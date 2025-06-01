@@ -1,0 +1,12 @@
+version: '3.8'
+
+services: {}
+  # Base MCP Hub services will be merged here
+
+networks:
+  mcp-network:
+    driver: bridge
+
+volumes:
+  mcp-data:
+    driver: local

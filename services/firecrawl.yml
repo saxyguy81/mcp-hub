@@ -1,0 +1,10 @@
+services:
+  mcp-demo-web:
+    image: nginx:alpine
+    ports:
+      - "3002:80"
+    environment:
+      - DEMO_MODE=true
+    networks:
+      - mcp-network
+    restart: unless-stopped

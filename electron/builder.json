@@ -1,0 +1,18 @@
+{
+  "appId": "com.example.mcphub",
+  "productName": "MCP Hub",
+  "files": [
+    "build/**/*",
+    "!**/*.map"
+  ],
+  "extraResources": [
+    { "from": "../dist/mcpctl*", "to": "bin/" }
+  ],
+  "mac": { 
+    "target": [ "dmg" ], 
+    "category": "public.app-category.developer-tools" 
+  },
+  "win": { 
+    "target": [ "msi" ] 
+  }
+}
