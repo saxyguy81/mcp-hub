@@ -60,7 +60,6 @@ jobs:
       - name: Install dependencies (without Docker package)
         run: |
           python -m pip install --upgrade pip
-          # Build CLI without Docker package - it's only needed for runtime operations
           pip install typer pyinstaller pyyaml toml
       
       - name: Build CLI binary
@@ -163,13 +162,9 @@ jobs:
           cd electron/dist
           for file in *; do
             if [ -f "$file" ]; then
-              # Extract extension
               extension="${file##*.}"
               basename="${file%.*}"
-              
-              # Add platform and arch to filename
               if [ "$extension" = "$file" ]; then
-                # No extension
                 mv "$file" "MCP-Hub-${{ matrix.platform }}-${{ matrix.arch }}"
               else
                 mv "$file" "MCP-Hub-${{ matrix.platform }}-${{ matrix.arch }}.${extension}"
@@ -190,40 +185,54 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Check pre-installed Docker
+        run: |
+          echo "🐳 Using pre-installed Docker in GitHub Actions"
+          docker --version
+          docker info
+          echo "✅ Docker is ready without additional setup"
       
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Login to GitHub Container Registry (manual)
+        run: |
+          echo "🔐 Logging into GitHub Container Registry"
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          echo "✅ Successfully logged into ghcr.io"
       
       - name: Extract version from tag
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
       
-      - name: Extract metadata for Docker
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/saxyguy81/mcp-hub/web
-          tags: |
-            type=ref,event=tag
-            type=raw,value=latest
-      
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./web/Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          platforms: linux/amd64,linux/arm64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Build and push Docker image (pure CLI)
+        run: |
+          echo "🔨 Building container image using pure Docker CLI"
+          
+          # Define image names
+          IMAGE_NAME="ghcr.io/saxyguy81/mcp-hub/web"
+          VERSION_TAG="${{ steps.version.outputs.VERSION }}"
+          
+          echo "Building: ${IMAGE_NAME}:${VERSION_TAG}"
+          echo "Building: ${IMAGE_NAME}:latest"
+          
+          # Build the image with both tags
+          docker build \
+            -f web/Dockerfile \
+            -t "${IMAGE_NAME}:${VERSION_TAG}" \
+            -t "${IMAGE_NAME}:latest" \
+            .
+          
+          echo "✅ Build completed successfully"
+          
+          # Push both tags
+          echo "📤 Pushing ${IMAGE_NAME}:${VERSION_TAG}"
+          docker push "${IMAGE_NAME}:${VERSION_TAG}"
+          
+          echo "📤 Pushing ${IMAGE_NAME}:latest"
+          docker push "${IMAGE_NAME}:latest"
+          
+          echo "✅ Container images published successfully!"
+          echo "📦 Available at:"
+          echo "   - ghcr.io/saxyguy81/mcp-hub/web:${VERSION_TAG}"
+          echo "   - ghcr.io/saxyguy81/mcp-hub/web:latest"
 
   create-release:
     needs: [build-cli, build-electron, publish-images]
@@ -271,19 +280,23 @@ jobs:
         id: changelog
         run: |
           if [ -f CHANGELOG.md ]; then
-            # Extract changelog for this version
             awk '/^## \['${{ steps.version.outputs.VERSION }}'\]/{flag=1; next} /^## \[/{flag=0} flag' CHANGELOG.md > release-notes.md
           else
             echo "Release ${{ steps.version.outputs.VERSION }}" > release-notes.md
             echo "" >> release-notes.md
-            echo "See commits for details: https://github.com/${{ github.repository }}/commits/${{ steps.version.outputs.VERSION }}" >> release-notes.md
+            echo "🔧 Enhanced UX Features:" >> release-notes.md
+            echo "- PATH immediate availability (no shell restart)" >> release-notes.md
+            echo "- Smart port conflict resolution" >> release-notes.md
+            echo "- Zero-friction installation experience" >> release-notes.md
+            echo "- Working container image publishing" >> release-notes.md
+            echo "" >> release-notes.md
+            echo "See commits: https://github.com/${{ github.repository }}/commits/${{ steps.version.outputs.VERSION }}" >> release-notes.md
           fi
       
       - name: Create Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Create release using GitHub CLI (modern approach)
           gh release create ${{ steps.version.outputs.VERSION }} \
             --title "MCP Hub ${{ steps.version.outputs.VERSION }}" \
             --notes-file release-notes.md \
@@ -294,8 +307,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd release-assets
-          
-          # Upload all release assets
           for file in *; do
             if [ -f "$file" ]; then
               echo "Uploading $file..."
@@ -303,22 +314,13 @@ jobs:
             fi
           done
       
-      - name: Update installation script URL
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Release Summary
         run: |
-          # The install.sh script is now available at:
-          # https://github.com/${{ github.repository }}/releases/latest/download/install.sh
-          echo "✅ Installation script available at:"
-          echo "curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/install.sh | bash"
-
-  update-homebrew:
-    needs: create-release
-    runs-on: macos-latest
-    name: Update Homebrew Formula (Future)
-    if: false  # Disable for now, enable when ready for Homebrew
-    steps:
-      - name: Placeholder for Homebrew formula update
-        run: |
-          echo "Future: Update Homebrew formula"
-          echo "Would update: brew install saxyguy81/tap/mcphub"
+          echo "🎉 MCP Hub ${{ steps.version.outputs.VERSION }} Released Successfully!"
+          echo ""
+          echo "📦 Container Images:"
+          echo "   docker pull ghcr.io/saxyguy81/mcp-hub/web:${{ steps.version.outputs.VERSION }}"
+          echo "   docker pull ghcr.io/saxyguy81/mcp-hub/web:latest"
+          echo ""
+          echo "⚡ Quick Install:"
+          echo "   curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/install.sh | bash"
