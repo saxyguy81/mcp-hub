@@ -19,8 +19,21 @@ jobs:
       
       - name: Install Python dependencies
         run: |
+          # Install Python dependencies without triggering Docker system package installation
           python -m pip install --upgrade pip
-          pip install typer docker pyinstaller pyyaml toml pytest
+          
+          # Install dependencies one by one to isolate any issues
+          pip install typer
+          pip install pyinstaller
+          pip install pyyaml
+          pip install toml
+          pip install pytest
+          
+          # Install docker Python package with no system dependencies
+          pip install docker --no-deps --force-reinstall
+          
+          # Verify Docker Python client (optional for tests)
+          python -c "import docker; print('Docker Python package imported successfully')" || echo "Docker import failed, but tests can still run"
       
       - name: Run Python tests
         run: |
@@ -205,8 +218,20 @@ jobs:
       
       - name: Install dependencies
         run: |
+          # Install Python dependencies without triggering Docker system package installation
           python -m pip install --upgrade pip
-          pip install typer docker pyinstaller pyyaml toml
+          
+          # Install dependencies one by one to isolate any issues
+          pip install typer
+          pip install pyinstaller
+          pip install pyyaml
+          pip install toml
+          
+          # Install docker Python package with no system dependencies
+          pip install docker --no-deps --force-reinstall
+          
+          # Verify Docker Python client can connect to existing Docker daemon
+          python -c "import docker; client = docker.from_env(); print('Docker client connected successfully')"
       
       - name: Build CLI
         run: |
