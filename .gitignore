@@ -62,6 +62,7 @@ docker-compose.yml
 # Config files with secrets
 .env
 *.toml
+!pyproject.toml
 
 # Logs
 *.log

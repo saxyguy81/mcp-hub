@@ -3,8 +3,8 @@
 Entry point for mcpctl CLI
 """
 
-import sys
 import os
+import sys
 from pathlib import Path
 
 # Add the parent directory to the path so we can import mcpctl

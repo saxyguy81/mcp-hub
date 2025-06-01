@@ -17,7 +17,9 @@ app = Flask(__name__)
 # Configuration
 GITHUB_REPO = "saxyguy81/mcp-hub"
 GITHUB_API_BASE = f"https://api.github.com/repos/{GITHUB_REPO}"
-INSTALL_SCRIPT_URL = f"https://github.com/{GITHUB_REPO}/releases/latest/download/install.sh"
+INSTALL_SCRIPT_URL = (
+    f"https://github.com/{GITHUB_REPO}/releases/latest/download/install.sh"
+)
 
 # HTML template for the landing page
 LANDING_PAGE = """
@@ -196,65 +198,68 @@ curl -fsSL https://github.com/saxyguy81/mcp-hub/releases/latest/download/install
 </html>
 """
 
-@app.route('/')
+
+@app.route("/")
 def landing_page():
     """Serve the landing page with installation instructions."""
     return render_template_string(LANDING_PAGE, repo=GITHUB_REPO)
 
-@app.route('/install.sh')
-@app.route('/')
+
+@app.route("/install.sh")
+@app.route("/")
 def install_script():
     """
     Serve the installation script.
     If accessed via curl, return the script directly.
     If accessed via browser, show the landing page.
     """
-    user_agent = request.headers.get('User-Agent', '').lower()
-    
+    user_agent = request.headers.get("User-Agent", "").lower()
+
     # If it's curl, wget, or similar, serve the script
-    if any(tool in user_agent for tool in ['curl', 'wget', 'httpie']):
+    if any(tool in user_agent for tool in ["curl", "wget", "httpie"]):
         try:
             # Fetch the latest install script from GitHub releases
             response = requests.get(INSTALL_SCRIPT_URL, timeout=10)
             if response.status_code == 200:
                 return Response(
                     response.content,
-                    mimetype='text/plain',
+                    mimetype="text/plain",
                     headers={
-                        'Content-Disposition': 'inline; filename=install.sh',
-                        'Cache-Control': 'no-cache'
-                    }
+                        "Content-Disposition": "inline; filename=install.sh",
+                        "Cache-Control": "no-cache",
+                    },
                 )
             else:
                 # Fallback to local script if GitHub is unavailable
-                script_path = Path(__file__).parent.parent / 'scripts' / 'install.sh'
+                script_path = Path(__file__).parent.parent / "scripts" / "install.sh"
                 if script_path.exists():
-                    with open(script_path, 'r') as f:
+                    with open(script_path, "r") as f:
                         return Response(
                             f.read(),
-                            mimetype='text/plain',
+                            mimetype="text/plain",
                             headers={
-                                'Content-Disposition': 'inline; filename=install.sh',
-                                'Cache-Control': 'no-cache'
-                            }
+                                "Content-Disposition": "inline; filename=install.sh",
+                                "Cache-Control": "no-cache",
+                            },
                         )
                 else:
                     return Response(
                         "# Installation script not found\n# Please visit https://github.com/{GITHUB_REPO}\n",
-                        mimetype='text/plain',
-                        status=404
+                        mimetype="text/plain",
+                        status=404,
                     )
         except Exception as e:
             return Response(
                 f"# Error fetching installation script: {e}\n# Please visit https://github.com/{GITHUB_REPO}\n",
-                mimetype='text/plain',
-                status=500
+                mimetype="text/plain",
+                status=500,
             )
     else:
         # Browser request, show landing page
         return landing_page()
 
-@app.route('/api/releases')
+
+@app.route("/api/releases")
 def api_releases():
     """API endpoint to get release information."""
     try:
@@ -266,7 +271,8 @@ def api_releases():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/latest')
+
+@app.route("/api/latest")
 def api_latest():
     """API endpoint to get latest release information."""
     try:
@@ -274,25 +280,32 @@ def api_latest():
         if response.status_code == 200:
             return jsonify(response.json())
         else:
-            return jsonify({"error": "Failed to fetch latest release"}), response.status_code
+            return (
+                jsonify({"error": "Failed to fetch latest release"}),
+                response.status_code,
+            )
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/health')
+
+@app.route("/health")
 def health():
     """Health check endpoint."""
-    return jsonify({
-        "status": "healthy",
-        "service": "MCP Hub Download Service",
-        "github_repo": GITHUB_REPO
-    })
+    return jsonify(
+        {
+            "status": "healthy",
+            "service": "MCP Hub Download Service",
+            "github_repo": GITHUB_REPO,
+        }
+    )
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    debug = os.environ.get('DEBUG', 'false').lower() == 'true'
-    
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    debug = os.environ.get("DEBUG", "false").lower() == "true"
+
     print(f"🚀 Starting MCP Hub Download Service on port {port}")
     print(f"📦 GitHub Repository: {GITHUB_REPO}")
     print(f"🔗 Install URL: http://localhost:{port}")
-    
-    app.run(host='0.0.0.0', port=port, debug=debug)
+
+    app.run(host="0.0.0.0", port=port, debug=debug)

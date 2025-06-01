@@ -1,0 +1,73 @@
+name: Code Quality & Linting
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  code-quality:
+    runs-on: ubuntu-latest
+    name: Code Quality Checks
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install linting dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install black flake8 mypy isort bandit safety
+          # Install minimal dependencies for type checking
+          pip install typer pyyaml toml types-PyYAML types-toml
+      
+      - name: Check code formatting with Black
+        run: |
+          echo "🎨 Checking code formatting..."
+          black --check --diff --color .
+      
+      - name: Check import sorting with isort
+        run: |
+          echo "📦 Checking import organization..."
+          isort --check-only --diff --color .
+      
+      - name: Lint with flake8
+        run: |
+          echo "🔍 Running flake8 linting..."
+          # Critical errors
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          # Style and complexity warnings (non-blocking)
+          flake8 . --count --exit-zero --max-complexity=10 --statistics
+      
+      - name: Type check with mypy
+        run: |
+          echo "🔬 Running type checking..."
+          mypy mcpctl/ || echo "Type checking completed with warnings"
+      
+      - name: Security check with bandit
+        run: |
+          echo "🔒 Running security analysis..."
+          bandit -r mcpctl/ -f json -o bandit-report.json || true
+          bandit -r mcpctl/ --severity-level medium
+      
+      - name: Check for security vulnerabilities
+        run: |
+          echo "🛡️ Checking dependency vulnerabilities..."
+          safety check --json --output safety-report.json || true
+          echo "Security scan completed"
+      
+      - name: Upload security reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-reports
+          path: |
+            bandit-report.json
+            safety-report.json
