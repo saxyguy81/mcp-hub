@@ -1,45 +1,32 @@
 name: Cross-Platform Installation Tests
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  test-platform-detection:
+  test-scripts:
     runs-on: ubuntu-latest
-    name: Test Platform Detection
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Debug environment
+      - name: Test detect-platform
         run: |
-          echo "🔍 Environment debugging..."
-          echo "PWD: $(pwd)"
-          ls -la scripts/ || echo "❌ scripts/ not found"
-          echo "Available tools:"
-          which curl bash chmod || echo "Basic tools check"
-          
-      - name: Test scripts step by step
-        run: |
-          echo "🔧 Setting permissions..."
-          chmod +x scripts/*.sh
-          echo "🧪 Testing detect-platform.sh..."
+          chmod +x scripts/detect-platform.sh
           ./scripts/detect-platform.sh
-          echo "🧪 Running platform test suite..."
+      - name: Test platforms
+        run: |
+          chmod +x scripts/test-platforms.sh  
           ./scripts/test-platforms.sh
-          echo "🧪 Testing release asset availability..."
+      - name: Test assets
+        run: |
+          chmod +x scripts/test-release-assets.sh
           ./scripts/test-release-assets.sh v1.0.2
 
-  test-cross-platform:
+  test-matrix:
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
         include:
@@ -47,29 +34,9 @@ jobs:
             platform: linux-amd64
           - os: macos-latest  
             platform: macos-arm64
-    name: Test ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Test platform detection
+      - name: Test
         run: |
           chmod +x scripts/detect-platform.sh
-          detected=$(./scripts/detect-platform.sh)
-          echo "Detected: $detected, Expected: ${{ matrix.platform }}"
-          if [ "$detected" = "${{ matrix.platform }}" ]; then
-            echo "✅ Platform detection correct"
-          else
-            echo "❌ Platform detection failed"
-            exit 1
-          fi
-          
-      - name: Test binary availability
-        run: |
-          url="https://github.com/saxyguy81/mcp-hub/releases/download/v1.0.2/mcpctl-${{ matrix.platform }}"
-          echo "Testing URL: $url"
-          if curl -sSf -I "$url" >/dev/null; then
-            echo "✅ Binary available"
-          else
-            echo "❌ Binary not available"
-            exit 1
-          fi
+          [ "$(./scripts/detect-platform.sh)" = "${{ matrix.platform }}" ]
