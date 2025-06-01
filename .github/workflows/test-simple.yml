@@ -1,0 +1,23 @@
+name: Platform Detection Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Simple test
+        run: |
+          echo "Testing basic functionality..."
+          ls -la scripts/
+          if [ -f "scripts/detect-platform.sh" ]; then
+            echo "✅ detect-platform.sh exists"
+            chmod +x scripts/detect-platform.sh
+            platform=$(./scripts/detect-platform.sh)
+            echo "✅ Platform detected: $platform"
+          else
+            echo "❌ detect-platform.sh not found"
+            exit 1
+          fi
